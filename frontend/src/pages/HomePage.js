@@ -26,6 +26,8 @@ export default function HomePage() {
   const [nomeListaSalvataggio, setNomeListaSalvataggio] = useState('');
   const [userLocation, setUserLocation] = useState({ lat: 45.4945, lng: 9.3256 }); // Default Pioltello
   const [preferenze, setPreferenze] = useState(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedListaForShare, setSelectedListaForShare] = useState(null);
   
   const inputRef = useRef(null);
 
