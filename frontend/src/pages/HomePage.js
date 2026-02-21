@@ -319,11 +319,30 @@ export default function HomePage() {
                   className="flex items-center justify-between px-4 py-3 bg-stone-50 rounded-xl cursor-pointer hover:bg-orange-50 transition-colors group"
                   data-testid={`saved-list-${lista.id}`}
                 >
-                  <div>
-                    <p className="font-medium text-stone-700 group-hover:text-orange-700">{lista.nome}</p>
-                    <p className="text-sm text-stone-500">{lista.prodotti.length} prodotti</p>
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <p className="font-medium text-stone-700 group-hover:text-orange-700 flex items-center gap-2">
+                        {lista.nome}
+                        {lista.condivisa && (
+                          <Users className="w-4 h-4 text-blue-500\" title="Lista condivisa" />
+                        )}
+                      </p>
+                      <p className="text-sm text-stone-500">{lista.prodotti.length} prodotti</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedListaForShare(lista);
+                        setShowShareModal(true);
+                      }}
+                      className="p-2 text-stone-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-all"
+                      data-testid={`share-list-${lista.id}`}
+                      title="Condividi"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={(e) => deleteLista(lista.id, e)}
                       className="p-2 text-stone-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
