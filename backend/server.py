@@ -42,6 +42,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    referral_code: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
