@@ -383,7 +383,157 @@ async def login(login_data: UserLogin):
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(current_user: dict = Depends(get_current_user)):
-    return UserResponse(**current_user)
+    return UserResponse(
+        id=current_user["id"], email=current_user["email"], nome=current_user["nome"],
+        data_registrazione=current_user["data_registrazione"],
+        preferenze=current_user["preferenze"], statistiche=current_user["statistiche"],
+        famiglia_id=current_user.get("famiglia_id"),
+        referral_code=current_user.get("referral_code"),
+        punti_referral=current_user.get("punti_referral", 0)
+    )
+
+# ============== REFERRAL PROGRAM ==============
+
+@api_router.get("/referral/stats")
+async def get_referral_stats(current_user: dict = Depends(get_current_user)):
+    """Ottieni statistiche referral dell'utente"""
+    # Get all referrals by this user
+    referrals = await db.referrals.find(
+        {"invitante_id": current_user["id"]},
+        {"_id": 0}
+    ).to_list(100)
+    
+    completati = [r for r in referrals if r["stato"] == "completed"]
+    pendenti = [r for r in referrals if r["stato"] == "pending"]
+    
+    # Calculate bonus history
+    storico = []
+    for r in completati:
+        storico.append({
+            "data": r.get("data_completamento"),
+            "descrizione": f"Registrazione {r.get('invitato_email', 'utente')}",
+            "punti": r.get("punti_assegnati", REFERRAL_PUNTI_INVITANTE)
+        })
+    
+    punti_totali = current_user.get("punti_referral", 0)
+    bonus_euro = punti_totali / PUNTI_PER_EURO
+    
+    return {
+        "referral_code": current_user.get("referral_code"),
+        "punti_totali": punti_totali,
+        "inviti_completati": len(completati),
+        "inviti_pendenti": len(pendenti),
+        "bonus_disponibile": round(bonus_euro, 2),
+        "storico_bonus": storico,
+        "punti_per_invito": REFERRAL_PUNTI_INVITANTE,
+        "punti_per_registrazione": REFERRAL_PUNTI_INVITATO,
+        "punti_per_euro": PUNTI_PER_EURO
+    }
+
+@api_router.get("/referral/inviti", response_model=List[ReferralResponse])
+async def get_referral_inviti(current_user: dict = Depends(get_current_user)):
+    """Ottieni lista inviti referral"""
+    inviti = await db.referrals.find(
+        {"invitante_id": current_user["id"]},
+        {"_id": 0}
+    ).sort("data_invito", -1).to_list(50)
+    return inviti
+
+@api_router.post("/referral/invita")
+async def invita_referral(invito: ReferralInvito, current_user: dict = Depends(get_current_user)):
+    """Invia un invito referral via email"""
+    # Check if email already registered
+    existing_user = await db.utenti.find_one({"email": invito.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Questo utente è già registrato")
+    
+    # Check if already invited by this user
+    existing_invite = await db.referrals.find_one({
+        "invitante_id": current_user["id"],
+        "invitato_email": invito.email
+    })
+    if existing_invite:
+        raise HTTPException(status_code=400, detail="Hai già invitato questo utente")
+    
+    # Create referral invite
+    referral_doc = {
+        "id": str(uuid.uuid4()),
+        "invitante_id": current_user["id"],
+        "invitante_nome": current_user["nome"],
+        "invitato_email": invito.email,
+        "invitato_id": None,
+        "stato": "pending",
+        "punti_assegnati": 0,
+        "data_invito": datetime.now(timezone.utc).isoformat(),
+        "data_completamento": None
+    }
+    await db.referrals.insert_one(referral_doc)
+    
+    return {
+        "message": f"Invito inviato a {invito.email}",
+        "referral_code": current_user.get("referral_code"),
+        "link": f"https://shopply.app/register?ref={current_user.get('referral_code')}"
+    }
+
+@api_router.post("/referral/riscatta")
+async def riscatta_punti(punti: int, current_user: dict = Depends(get_current_user)):
+    """Riscatta punti referral come sconto"""
+    if punti <= 0:
+        raise HTTPException(status_code=400, detail="Punti non validi")
+    
+    punti_disponibili = current_user.get("punti_referral", 0)
+    if punti > punti_disponibili:
+        raise HTTPException(status_code=400, detail="Punti insufficienti")
+    
+    sconto_euro = punti / PUNTI_PER_EURO
+    
+    # Update user points
+    await db.utenti.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"punti_referral": -punti}}
+    )
+    
+    # Create redemption record
+    await db.riscatti_referral.insert_one({
+        "id": str(uuid.uuid4()),
+        "utente_id": current_user["id"],
+        "punti_riscattati": punti,
+        "valore_euro": sconto_euro,
+        "data": datetime.now(timezone.utc).isoformat()
+    })
+    
+    # Notify user
+    await create_notification(
+        current_user["id"], "referral",
+        f"💰 Sconto riscattato!",
+        f"Hai riscattato {punti} punti per uno sconto di €{sconto_euro:.2f}",
+        link="/referral"
+    )
+    
+    return {
+        "message": "Punti riscattati con successo",
+        "punti_riscattati": punti,
+        "sconto_euro": round(sconto_euro, 2),
+        "punti_rimanenti": punti_disponibili - punti
+    }
+
+@api_router.get("/referral/classifica")
+async def get_classifica_referral():
+    """Ottieni classifica top referrer"""
+    top_users = await db.utenti.find(
+        {"punti_referral": {"$gt": 0}},
+        {"_id": 0, "nome": 1, "punti_referral": 1}
+    ).sort("punti_referral", -1).limit(10).to_list(10)
+    
+    classifica = []
+    for i, user in enumerate(top_users, 1):
+        classifica.append({
+            "posizione": i,
+            "nome": user["nome"][:2] + "***",  # Privacy
+            "punti": user["punti_referral"]
+        })
+    
+    return classifica
 
 # ============== PREFERENZE ==============
 
