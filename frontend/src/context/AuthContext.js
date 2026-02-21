@@ -37,8 +37,8 @@ export function AuthProvider({ children }) {
     return userData;
   };
 
-  const register = async (email, password, nome) => {
-    const res = await authAPI.register({ email, password, nome });
+  const register = async (email, password, nome, referralCode = null) => {
+    const res = await authAPI.register({ email, password, nome, referral_code: referralCode });
     const { access_token, user: userData } = res.data;
     localStorage.setItem('shopply_token', access_token);
     localStorage.setItem('shopply_user', JSON.stringify(userData));
