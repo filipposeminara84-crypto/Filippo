@@ -1,8 +1,9 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Clock, Settings, LogOut, ShoppingCart } from 'lucide-react';
+import { Home, Clock, Settings, LogOut, ShoppingCart, Tag } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
+import NotificheDropdown from './NotificheDropdown';
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
@@ -15,6 +16,7 @@ export default function Layout({ children }) {
 
   const navItems = [
     { to: '/', icon: Home, label: 'Home' },
+    { to: '/offerte', icon: Tag, label: 'Offerte' },
     { to: '/storico', icon: Clock, label: 'Storico' },
     { to: '/impostazioni', icon: Settings, label: 'Impostazioni' },
   ];
@@ -51,6 +53,7 @@ export default function Layout({ children }) {
         </nav>
 
         <div className="flex items-center gap-4">
+          <NotificheDropdown />
           <span className="text-sm text-stone-600">Ciao, {user?.nome}</span>
           <button
             onClick={handleLogout}
@@ -77,7 +80,7 @@ export default function Layout({ children }) {
               to={to}
               className={({ isActive }) =>
                 cn(
-                  'flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors',
+                  'flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors',
                   isActive ? 'text-emerald-600' : 'text-stone-500'
                 )
               }
@@ -88,7 +91,7 @@ export default function Layout({ children }) {
           ))}
           <button
             onClick={handleLogout}
-            className="flex flex-col items-center gap-1 px-4 py-2 text-stone-500"
+            className="flex flex-col items-center gap-1 px-3 py-2 text-stone-500"
             data-testid="mobile-logout-btn"
           >
             <LogOut className="w-5 h-5" />
