@@ -425,6 +425,19 @@ export default function HomePage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Share Modal */}
+      <CondividiListaModal
+        lista={selectedListaForShare}
+        isOpen={showShareModal}
+        onClose={() => {
+          setShowShareModal(false);
+          setSelectedListaForShare(null);
+        }}
+        onSuccess={() => {
+          loadListeSalvate();
+        }}
+      />
     </Layout>
   );
 }
