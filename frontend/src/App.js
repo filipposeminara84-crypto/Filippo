@@ -61,6 +61,11 @@ function AppRoutes() {
           <OffertePage />
         </PrivateRoute>
       } />
+      <Route path="/referral" element={
+        <PrivateRoute>
+          <ReferralPage />
+        </PrivateRoute>
+      } />
       <Route path="/storico" element={
         <PrivateRoute>
           <StoricoPage />
