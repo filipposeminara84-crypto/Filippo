@@ -54,6 +54,8 @@ class UserResponse(UserBase):
     preferenze: Dict[str, Any]
     statistiche: Dict[str, Any]
     famiglia_id: Optional[str] = None
+    referral_code: Optional[str] = None
+    punti_referral: int = 0
 
 class TokenResponse(BaseModel):
     access_token: str
