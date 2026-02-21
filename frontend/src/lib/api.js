@@ -4,21 +4,15 @@ const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 const api = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
 
-// Add auth token to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('shopply_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Handle auth errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -49,13 +43,17 @@ export const prodottiAPI = {
   getAll: (params) => api.get('/prodotti', { params }),
   autocomplete: (q) => api.get('/prodotti/autocomplete', { params: { q } }),
   getCategorie: () => api.get('/categorie'),
+  getOfferte: () => api.get('/prodotti/offerte'),
 };
 
 // Liste
 export const listeAPI = {
   getAll: () => api.get('/liste'),
   create: (data) => api.post('/liste', data),
+  update: (id, data) => api.put(`/liste/${id}`, data),
   delete: (id) => api.delete(`/liste/${id}`),
+  condividi: (id, email) => api.post(`/liste/${id}/condividi`, { email_destinatario: email }),
+  rimuoviCondivisione: (id, email) => api.delete(`/liste/${id}/condividi/${email}`),
 };
 
 // Ottimizzazione
@@ -74,6 +72,30 @@ export const storicoAPI = {
 export const preferenzeAPI = {
   get: () => api.get('/preferenze'),
   update: (data) => api.put('/preferenze', data),
+};
+
+// Notifiche
+export const notificheAPI = {
+  getAll: () => api.get('/notifiche'),
+  getNonLette: () => api.get('/notifiche/non-lette'),
+  segnaLetta: (id) => api.patch(`/notifiche/${id}/letta`),
+  leggiTutte: () => api.patch('/notifiche/leggi-tutte'),
+  elimina: (id) => api.delete(`/notifiche/${id}`),
+};
+
+// Famiglia
+export const famigliaAPI = {
+  get: () => api.get('/famiglia'),
+  crea: (nome) => api.post(`/famiglia/crea?nome=${encodeURIComponent(nome)}`),
+  invita: (email) => api.post('/famiglia/invita', { email }),
+  getInviti: () => api.get('/famiglia/inviti'),
+  accettaInvito: (id) => api.post(`/famiglia/inviti/${id}/accetta`),
+};
+
+// Prezzi
+export const prezziAPI = {
+  aggiorna: () => api.post('/prezzi/aggiorna'),
+  ultimoAggiornamento: () => api.get('/prezzi/ultimo-aggiornamento'),
 };
 
 // Seed
