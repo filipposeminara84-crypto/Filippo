@@ -252,6 +252,20 @@ def haversine_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> fl
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return R * c
 
+# ============== REFERRAL HELPERS ==============
+
+def generate_referral_code(nome: str) -> str:
+    """Genera un codice referral unico basato sul nome"""
+    import string
+    prefix = ''.join(c.upper() for c in nome[:3] if c.isalpha())
+    suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+    return f"{prefix}{suffix}"
+
+# Costanti referral
+REFERRAL_PUNTI_INVITANTE = 50  # Punti per chi invita
+REFERRAL_PUNTI_INVITATO = 25   # Punti per chi si registra
+PUNTI_PER_EURO = 10            # 10 punti = 1€ di sconto
+
 # ============== AUTH ENDPOINTS ==============
 
 @api_router.post("/auth/register", response_model=TokenResponse)
