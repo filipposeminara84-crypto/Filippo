@@ -358,8 +358,52 @@ def main():
             print("❌ CRITICAL: Shopping optimization failed!")
             return 1
 
-        # 7. History and preferences
-        print("\n📋 PHASE 7: User Data")
+        # 7. V2.0 NEW FEATURES
+        print("\n📋 PHASE 7: New V2.0 Features")
+        
+        # Test offers page
+        offers_success, offers = tester.test_get_offerte()
+        if not offers_success:
+            print("❌ Get offerte failed")
+        
+        # Test categories
+        cat_success, categories = tester.test_get_categorie()
+        if not cat_success:
+            print("⚠️ Get categorie failed")
+        
+        # Test price update trigger
+        update_success, update_resp = tester.test_aggiorna_prezzi()
+        if not update_success:
+            print("❌ Price update trigger failed")
+        
+        # Test last update info
+        last_update_success, last_update = tester.test_ultimo_aggiornamento()
+        if not last_update_success:
+            print("⚠️ Get ultimo aggiornamento failed")
+        
+        # Test notifications
+        notif_success, notifications = tester.test_get_notifiche()
+        if not notif_success:
+            print("⚠️ Get notifiche failed")
+        
+        # Test unread count
+        unread_success, unread_count = tester.test_get_notifiche_non_lette()
+        if not unread_success:
+            print("⚠️ Get unread count failed")
+        
+        # Test list sharing (if we have a list)
+        if lista_success and lista:
+            share_success, share_resp = tester.test_condividi_lista(lista.get('id'))
+            if not share_success:
+                print("❌ List sharing failed")
+        
+        # Test price matrix
+        matrix_success, matrix = tester.test_matrice_prezzi()
+        if not matrix_success:
+            print("⚠️ Price matrix failed")
+
+        # 8. History and preferences  
+        print("\n📋 PHASE 8: User Data")
         
         if not tester.test_get_storico()[0]:
             print("⚠️ Get storico failed")
