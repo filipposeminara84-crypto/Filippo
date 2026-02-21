@@ -7,6 +7,7 @@ import RisultatiPage from './pages/RisultatiPage';
 import StoricoPage from './pages/StoricoPage';
 import ImpostazioniPage from './pages/ImpostazioniPage';
 import OffertePage from './pages/OffertePage';
+import ReferralPage from './pages/ReferralPage';
 import './App.css';
 
 function PrivateRoute({ children }) {
