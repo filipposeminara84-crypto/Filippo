@@ -90,20 +90,44 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               {!isLogin && (
-                <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-2">
-                    Nome
-                  </label>
-                  <input
-                    type="text"
-                    value={nome}
-                    onChange={(e) => setNome(e.target.value)}
-                    className="w-full h-12 px-4 rounded-xl border border-stone-200 bg-stone-50 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                    placeholder="Il tuo nome"
-                    required={!isLogin}
-                    data-testid="register-name-input"
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-2">
+                      Nome
+                    </label>
+                    <input
+                      type="text"
+                      value={nome}
+                      onChange={(e) => setNome(e.target.value)}
+                      className="w-full h-12 px-4 rounded-xl border border-stone-200 bg-stone-50 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      placeholder="Il tuo nome"
+                      required={!isLogin}
+                      data-testid="register-name-input"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-2 flex items-center gap-2">
+                      <Gift className="w-4 h-4 text-purple-500" />
+                      Codice Referral (opzionale)
+                    </label>
+                    <input
+                      type="text"
+                      value={referralCode}
+                      onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                      className="w-full h-12 px-4 rounded-xl border border-purple-200 bg-purple-50 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all font-mono tracking-wider"
+                      placeholder="Es. MAR5X9K2"
+                      maxLength={8}
+                      data-testid="referral-code-input"
+                    />
+                    {referralCode && (
+                      <p className="text-sm text-purple-600 mt-1 flex items-center gap-1">
+                        <Gift className="w-3 h-3" />
+                        Riceverai 25 punti bonus alla registrazione!
+                      </p>
+                    )}
+                  </div>
+                </>
               )}
 
               <div>
