@@ -475,6 +475,26 @@ async def invita_referral(invito: ReferralInvito, current_user: dict = Depends(g
         "link": f"https://shopply.app/register?ref={current_user.get('referral_code')}"
     }
 
+@api_router.post("/referral/genera-codice")
+async def genera_codice_referral(current_user: dict = Depends(get_current_user)):
+    """Genera un codice referral per utenti esistenti che non ne hanno uno"""
+    if current_user.get("referral_code"):
+        return {"referral_code": current_user["referral_code"], "message": "Codice già esistente"}
+    
+    referral_code = generate_referral_code(current_user["nome"])
+    
+    # Check if unique
+    while await db.utenti.find_one({"referral_code": referral_code}):
+        referral_code = generate_referral_code(current_user["nome"])
+    
+    # Update user
+    await db.utenti.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"referral_code": referral_code, "punti_referral": 0}}
+    )
+    
+    return {"referral_code": referral_code, "message": "Codice generato con successo"}
+
 @api_router.post("/referral/riscatta")
 async def riscatta_punti(punti: int, current_user: dict = Depends(get_current_user)):
     """Riscatta punti referral come sconto"""
