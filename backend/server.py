@@ -163,13 +163,38 @@ class Notifica(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
     utente_id: str
-    tipo: str  # "offerta", "condivisione", "sistema"
+    tipo: str  # "offerta", "condivisione", "sistema", "referral"
     titolo: str
     messaggio: str
     data: str
     letta: bool = False
     link: Optional[str] = None
     dati_extra: Optional[Dict[str, Any]] = None
+
+# ============== REFERRAL MODELS ==============
+
+class ReferralStats(BaseModel):
+    referral_code: str
+    punti_totali: int
+    inviti_completati: int
+    inviti_pendenti: int
+    bonus_disponibile: float
+    storico_bonus: List[Dict[str, Any]]
+
+class ReferralInvito(BaseModel):
+    email: EmailStr
+
+class ReferralResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    invitante_id: str
+    invitante_nome: str
+    invitato_email: str
+    invitato_id: Optional[str] = None
+    stato: str  # "pending", "completed", "expired"
+    punti_assegnati: int
+    data_invito: str
+    data_completamento: Optional[str] = None
 
 class InvitoFamiglia(BaseModel):
     email: EmailStr
