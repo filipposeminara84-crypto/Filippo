@@ -275,6 +275,20 @@ async def register(user_data: UserCreate):
         raise HTTPException(status_code=400, detail="Email già registrata")
     
     user_id = str(uuid.uuid4())
+    referral_code = generate_referral_code(user_data.nome)
+    
+    # Check if unique referral code
+    while await db.utenti.find_one({"referral_code": referral_code}):
+        referral_code = generate_referral_code(user_data.nome)
+    
+    # Check if registered with referral code
+    invitante = None
+    punti_iniziali = 0
+    if user_data.referral_code:
+        invitante = await db.utenti.find_one({"referral_code": user_data.referral_code.upper()}, {"_id": 0})
+        if invitante:
+            punti_iniziali = REFERRAL_PUNTI_INVITATO
+    
     user_doc = {
         "id": user_id,
         "email": user_data.email,
@@ -295,7 +309,10 @@ async def register(user_data: UserCreate):
             "risparmio_totale_euro": 0.0,
             "tempo_totale_risparmiato_min": 0
         },
-        "famiglia_id": None
+        "famiglia_id": None,
+        "referral_code": referral_code,
+        "punti_referral": punti_iniziali,
+        "invitato_da": invitante["id"] if invitante else None
     }
     await db.utenti.insert_one(user_doc)
     
@@ -303,11 +320,47 @@ async def register(user_data: UserCreate):
     await create_notification(user_id, "sistema", "Benvenuto su Shopply! 🛒", 
         "Inizia ad aggiungere prodotti alla tua lista per ottimizzare la spesa.")
     
+    # If registered with referral, reward inviter
+    if invitante:
+        # Update inviter points
+        await db.utenti.update_one(
+            {"id": invitante["id"]},
+            {"$inc": {"punti_referral": REFERRAL_PUNTI_INVITANTE}}
+        )
+        
+        # Update referral record
+        await db.referrals.update_one(
+            {"invitante_id": invitante["id"], "invitato_email": user_data.email},
+            {"$set": {
+                "stato": "completed",
+                "invitato_id": user_id,
+                "punti_assegnati": REFERRAL_PUNTI_INVITANTE,
+                "data_completamento": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        # Notify inviter
+        await create_notification(
+            invitante["id"], "referral",
+            f"🎉 {user_data.nome} si è registrato!",
+            f"Hai guadagnato {REFERRAL_PUNTI_INVITANTE} punti grazie al tuo invito!",
+            link="/referral"
+        )
+        
+        # Notify new user about bonus
+        await create_notification(
+            user_id, "referral",
+            f"🎁 Bonus di benvenuto!",
+            f"Hai ricevuto {REFERRAL_PUNTI_INVITATO} punti grazie all'invito di {invitante['nome']}!",
+            link="/referral"
+        )
+    
     token = create_token(user_id)
     user_response = UserResponse(
         id=user_id, email=user_data.email, nome=user_data.nome,
         data_registrazione=user_doc["data_registrazione"],
-        preferenze=user_doc["preferenze"], statistiche=user_doc["statistiche"]
+        preferenze=user_doc["preferenze"], statistiche=user_doc["statistiche"],
+        referral_code=referral_code, punti_referral=punti_iniziali
     )
     return TokenResponse(access_token=token, user=user_response)
 
@@ -322,7 +375,9 @@ async def login(login_data: UserLogin):
         id=user["id"], email=user["email"], nome=user["nome"],
         data_registrazione=user["data_registrazione"],
         preferenze=user["preferenze"], statistiche=user["statistiche"],
-        famiglia_id=user.get("famiglia_id")
+        famiglia_id=user.get("famiglia_id"),
+        referral_code=user.get("referral_code"),
+        punti_referral=user.get("punti_referral", 0)
     )
     return TokenResponse(access_token=token, user=user_response)
 
