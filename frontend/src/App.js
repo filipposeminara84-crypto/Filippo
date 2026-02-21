@@ -55,6 +55,11 @@ function AppRoutes() {
           <RisultatiPage />
         </PrivateRoute>
       } />
+      <Route path="/offerte" element={
+        <PrivateRoute>
+          <OffertePage />
+        </PrivateRoute>
+      } />
       <Route path="/storico" element={
         <PrivateRoute>
           <StoricoPage />
