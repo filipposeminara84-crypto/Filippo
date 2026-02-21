@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ShoppingCart, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { ShoppingCart, Eye, EyeOff, Loader2, Gift } from 'lucide-react';
 import { seedAPI } from '../lib/api';
 
 export default function LoginPage() {
+  const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nome, setNome] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -16,6 +18,15 @@ export default function LoginPage() {
   
   const { login, register } = useAuth();
   const navigate = useNavigate();
+
+  // Check for referral code in URL
+  useEffect(() => {
+    const ref = searchParams.get('ref');
+    if (ref) {
+      setReferralCode(ref.toUpperCase());
+      setIsLogin(false); // Switch to register mode
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26,7 +37,7 @@ export default function LoginPage() {
       if (isLogin) {
         await login(email, password);
       } else {
-        await register(email, password, nome);
+        await register(email, password, nome, referralCode || null);
       }
       navigate('/');
     } catch (err) {
