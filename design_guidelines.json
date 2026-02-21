@@ -1,0 +1,204 @@
+{
+  "identity": {
+    "name": "Shopply",
+    "tagline": "Spesa intelligente, risparmio reale.",
+    "tone": "Efficient, Fresh, Trustworthy, Italian Family-Oriented",
+    "theme_preference": "light",
+    "design_archetype": "Organic & Earthy (with a tech twist)"
+  },
+  "typography": {
+    "font_family_heading": "Manrope, sans-serif",
+    "font_family_body": "Inter, sans-serif",
+    "font_family_data": "JetBrains Mono, monospace",
+    "weights": {
+      "heading_bold": 800,
+      "heading_medium": 600,
+      "body_regular": 400,
+      "body_medium": 500
+    },
+    "scale": {
+      "h1": "text-4xl md:text-5xl tracking-tight font-extrabold",
+      "h2": "text-3xl tracking-tight font-bold",
+      "h3": "text-2xl font-semibold",
+      "p": "text-base leading-relaxed text-slate-600",
+      "small": "text-sm text-slate-500",
+      "price": "text-lg font-mono font-bold tracking-tight"
+    }
+  },
+  "colors": {
+    "palette": {
+      "primary": {
+        "DEFAULT": "#10B981",
+        "foreground": "#FFFFFF",
+        "hover": "#059669",
+        "description": "Emerald Green - Represents freshness and savings. Use for primary CTAs and positive states."
+      },
+      "secondary": {
+        "DEFAULT": "#F97316",
+        "foreground": "#FFFFFF",
+        "hover": "#EA580C",
+        "description": "Bright Orange - Represents offers and urgency. Use for 'Best Price' highlights and alerts."
+      },
+      "background": {
+        "DEFAULT": "#FAFAF9",
+        "paper": "#FFFFFF",
+        "subtle": "#F5F5F4"
+      },
+      "text": {
+        "primary": "#1C1917",
+        "secondary": "#44403C",
+        "muted": "#78716C"
+      },
+      "border": {
+        "DEFAULT": "#E7E5E4",
+        "focus": "#10B981"
+      },
+      "status": {
+        "success": "#10B981",
+        "warning": "#F59E0B",
+        "error": "#EF4444",
+        "info": "#3B82F6"
+      }
+    },
+    "gradients": {
+      "savings": "bg-gradient-to-br from-emerald-500 to-teal-600",
+      "fresh": "bg-gradient-to-br from-orange-400 to-red-500"
+    },
+    "forbidden": [
+      "purple",
+      "violet",
+      "pink-to-purple gradients",
+      "dark mode by default"
+    ]
+  },
+  "layout_strategy": {
+    "container": "max-w-md mx-auto md:max-w-5xl px-4 md:px-8",
+    "spacing": {
+      "section_gap": "gap-8 md:gap-12",
+      "item_gap": "gap-3 md:gap-4",
+      "internal_padding": "p-4 md:p-6"
+    },
+    "grid_system": {
+      "dashboard": "grid grid-cols-1 md:grid-cols-3 gap-4",
+      "grocery_list": "flex flex-col space-y-3"
+    },
+    "mobile_nav": "fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-lg border-t border-stone-200 z-50 h-16 flex items-center justify-around",
+    "z_index": {
+      "toast": 100,
+      "modal": 50,
+      "nav": 40,
+      "map_controls": 30
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "rounded-full px-6 py-6 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-all active:scale-95 font-bold uppercase tracking-wide text-sm",
+      "secondary": "rounded-full px-6 py-6 bg-white border border-stone-200 text-stone-700 hover:bg-stone-50 transition-all active:scale-95 font-semibold",
+      "ghost": "rounded-lg px-4 py-2 hover:bg-stone-100 text-stone-600 hover:text-stone-900 transition-colors",
+      "icon": "h-10 w-10 rounded-full flex items-center justify-center hover:bg-stone-100 transition-colors"
+    },
+    "cards": {
+      "default": "bg-white rounded-2xl shadow-sm border border-stone-100 hover:shadow-md transition-shadow p-5",
+      "interactive": "cursor-pointer active:scale-[0.98] transition-transform duration-200",
+      "stat": "bg-white rounded-2xl border border-stone-100 p-4 flex flex-col justify-between h-32"
+    },
+    "inputs": {
+      "default": "rounded-xl border-stone-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-stone-50 h-12 px-4 transition-all placeholder:text-stone-400",
+      "search": "pl-10 rounded-full bg-white shadow-sm border-none ring-1 ring-stone-200 focus:ring-2 focus:ring-emerald-500"
+    },
+    "map": {
+      "container": "w-full h-[60vh] md:h-full rounded-3xl overflow-hidden shadow-inner border border-stone-200 relative",
+      "marker_user": "w-6 h-6 bg-blue-500 border-2 border-white rounded-full shadow-lg animate-pulse",
+      "marker_store": "text-2xl drop-shadow-md hover:scale-110 transition-transform cursor-pointer"
+    }
+  },
+  "visual_enhancers": {
+    "shadows": {
+      "soft": "shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]",
+      "floating": "shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)]",
+      "inner": "shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]"
+    },
+    "borders": {
+      "subtle": "border border-stone-100",
+      "active": "ring-2 ring-emerald-500 ring-offset-2"
+    },
+    "radius": {
+      "default": "rounded-xl",
+      "large": "rounded-2xl",
+      "full": "rounded-full"
+    },
+    "textures": {
+      "paper": "bg-[url('https://www.transparenttextures.com/patterns/cardboard-flat.png')] opacity-50"
+    }
+  },
+  "motion": {
+    "page_transition": {
+      "initial": { "opacity": 0, "x": 20 },
+      "animate": { "opacity": 1, "x": 0 },
+      "exit": { "opacity": 0, "x": -20 },
+      "transition": { "duration": 0.3, "ease": "easeOut" }
+    },
+    "list_item": {
+      "initial": { "opacity": 0, "y": 10 },
+      "animate": { "opacity": 1, "y": 0 },
+      "exit": { "opacity": 0, "height": 0, "marginBottom": 0 },
+      "transition": { "type": "spring", "stiffness": 300, "damping": 30 }
+    },
+    "hover": {
+      "scale": 1.02,
+      "transition": { "duration": 0.2 }
+    }
+  },
+  "assets": {
+    "images": [
+      {
+        "category": "hero",
+        "url": "https://images.pexels.com/photos/32495172/pexels-photo-32495172.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "alt": "Fresh Market Vegetables",
+        "usage": "Landing page hero background or feature section"
+      },
+      {
+        "category": "feature_freshness",
+        "url": "https://images.pexels.com/photos/5620667/pexels-photo-5620667.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "alt": "Fresh Lettuce Garden",
+        "usage": "Freshness guarantee section"
+      },
+      {
+        "category": "map_preview",
+        "url": "https://images.pexels.com/photos/5444625/pexels-photo-5444625.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "alt": "Navigation App Interface",
+        "usage": "Map feature preview card"
+      }
+    ],
+    "icons": {
+      "library": "lucide-react",
+      "styles": "stroke-1.5 md:stroke-2"
+    }
+  },
+  "component_instructions": {
+    "Sheet": "Use for mobile-first details view. Trigger from bottom.",
+    "Sonner": "Use for all notifications (Added to list, Route calculated).",
+    "Slider": "Customize the thumb to be Emerald Green. Use for the 'Price vs Time' trade-off.",
+    "Card": "Remove default border if using shadow-sm. Add hover states for interactivity.",
+    "Input": "Increase height to h-12 for better touch targets on mobile.",
+    "Button": "Ensure min-height 44px for touch targets."
+  },
+  "universal_guidelines": [
+    "Do NOT use gradients on text.",
+    "Ensure 44px minimum touch target for all interactive elements.",
+    "Use 'Price' and 'Time' icons consistently (Wallet vs Clock).",
+    "Format currency as '€ 12,50' (Italian locale).",
+    "Dates should be 'DD/MM/YYYY'.",
+    "Map markers must be clearly distinguishable.",
+    "Empty states must have a helpful CTA (e.g., 'No lists yet? Create your first one!').",
+    "Use 'skeleton' loading states for data fetching.",
+    "Avoid 'Alert' dialogs for non-destructive actions; use Toasts.",
+    "Always check contrast ratios for text on colored backgrounds (Green buttons need White text)."
+  ],
+  "accessibility": {
+    "contrast_check": "Ensure primary green text is dark enough on white backgrounds, or use white text on green backgrounds.",
+    "focus_states": "All inputs must have a visible ring-2 ring-emerald-500 on focus.",
+    "aria_labels": "All icon-only buttons (like FABs) must have aria-label.",
+    "reduced_motion": "Respect prefers-reduced-motion media query for framer-motion variants."
+  }
+}
