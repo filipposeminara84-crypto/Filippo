@@ -92,6 +92,15 @@ export const famigliaAPI = {
   accettaInvito: (id) => api.post(`/famiglia/inviti/${id}/accetta`),
 };
 
+// Referral
+export const referralAPI = {
+  getStats: () => api.get('/referral/stats'),
+  getInviti: () => api.get('/referral/inviti'),
+  invita: (email) => api.post('/referral/invita', { email }),
+  riscatta: (punti) => api.post('/referral/riscatta', null, { params: { punti } }),
+  getClassifica: () => api.get('/referral/classifica'),
+};
+
 // Prezzi
 export const prezziAPI = {
   aggiorna: () => api.post('/prezzi/aggiorna'),
