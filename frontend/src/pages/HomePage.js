@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingCart, Plus, X, Search, Save, List, Loader2,
-  MapPin, Clock, Wallet, Sparkles, ChevronRight, Trash2
+  MapPin, Clock, Wallet, Sparkles, ChevronRight, Trash2, Share2, Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { prodottiAPI, listeAPI, ottimizzaAPI, preferenzeAPI } from '../lib/api';
 import { formatPrice } from '../lib/utils';
 import Layout from '../components/Layout';
+import CondividiListaModal from '../components/CondividiListaModal';
 
 export default function HomePage() {
   const { user } = useAuth();
