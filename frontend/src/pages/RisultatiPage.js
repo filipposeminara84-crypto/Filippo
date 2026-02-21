@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -59,7 +59,7 @@ const userIcon = L.divIcon({
 function FitBounds({ bounds }) {
   const map = useMap();
   React.useEffect(() => {
-    if (bounds.length > 0) {
+    if (bounds && bounds.length > 0) {
       map.fitBounds(bounds, { padding: [50, 50] });
     }
   }, [bounds, map]);
@@ -69,10 +69,41 @@ function FitBounds({ bounds }) {
 export default function RisultatiPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { risultato, listaOriginale } = location.state || {};
-  const [expandedStore, setExpandedStore] = React.useState(null);
-  const [userPosition] = React.useState({ lat: 45.4945, lng: 9.3256 });
+  const risultato = location.state?.risultato;
+  const [expandedStore, setExpandedStore] = useState(null);
+  const [userPosition] = useState({ lat: 45.4945, lng: 9.3256 });
 
+  // Calculate map bounds - always call hooks
+  const bounds = useMemo(() => {
+    if (!risultato?.piano_ottimale) return [];
+    const points = [[userPosition.lat, userPosition.lng]];
+    risultato.piano_ottimale.forEach(item => {
+      points.push([item.supermercato.lat, item.supermercato.lng]);
+    });
+    return points;
+  }, [risultato, userPosition]);
+
+  // Polyline coordinates
+  const polylinePositions = useMemo(() => {
+    if (!risultato?.piano_ottimale) return [];
+    const positions = [[userPosition.lat, userPosition.lng]];
+    risultato.piano_ottimale.forEach(item => {
+      positions.push([item.supermercato.lat, item.supermercato.lng]);
+    });
+    return positions;
+  }, [risultato, userPosition]);
+
+  // Open navigation in Google Maps
+  const openNavigation = () => {
+    if (!risultato?.piano_ottimale) return;
+    const waypoints = risultato.piano_ottimale.map(item => 
+      `${item.supermercato.lat},${item.supermercato.lng}`
+    ).join('/');
+    const url = `https://www.google.com/maps/dir/${userPosition.lat},${userPosition.lng}/${waypoints}`;
+    window.open(url, '_blank');
+  };
+
+  // Early return AFTER all hooks
   if (!risultato) {
     return (
       <Layout>
@@ -90,33 +121,6 @@ export default function RisultatiPage() {
   }
 
   const { piano_ottimale, costo_totale, tempo_stimato_min, risparmio_euro, risparmio_percentuale, distanza_totale_km } = risultato;
-
-  // Calculate map bounds
-  const bounds = useMemo(() => {
-    const points = [[userPosition.lat, userPosition.lng]];
-    piano_ottimale.forEach(item => {
-      points.push([item.supermercato.lat, item.supermercato.lng]);
-    });
-    return points;
-  }, [piano_ottimale, userPosition]);
-
-  // Polyline coordinates
-  const polylinePositions = useMemo(() => {
-    const positions = [[userPosition.lat, userPosition.lng]];
-    piano_ottimale.forEach(item => {
-      positions.push([item.supermercato.lat, item.supermercato.lng]);
-    });
-    return positions;
-  }, [piano_ottimale, userPosition]);
-
-  // Open navigation in Google Maps
-  const openNavigation = () => {
-    const waypoints = piano_ottimale.map(item => 
-      `${item.supermercato.lat},${item.supermercato.lng}`
-    ).join('/');
-    const url = `https://www.google.com/maps/dir/${userPosition.lat},${userPosition.lng}/${waypoints}`;
-    window.open(url, '_blank');
-  };
 
   return (
     <Layout>
