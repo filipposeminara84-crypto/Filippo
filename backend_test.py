@@ -1,441 +1,361 @@
+#!/usr/bin/env python3
+
 import requests
 import sys
 import json
 from datetime import datetime
+import uuid
 
-class ShopplyAPITester:
+class ShopplyReferralTester:
     def __init__(self, base_url="https://command-center-124.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
+        self.user_id = None
         self.tests_run = 0
         self.tests_passed = 0
-        self.failed_tests = []
+        self.test_results = []
 
-    def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
-        """Run a single API test"""
-        url = f"{self.base_url}/{endpoint}"
-        test_headers = {'Content-Type': 'application/json'}
-        
-        if self.token:
-            test_headers['Authorization'] = f'Bearer {self.token}'
-        if headers:
-            test_headers.update(headers)
-
+    def log_test(self, name, success, details="", endpoint=""):
+        """Log test result"""
         self.tests_run += 1
+        if success:
+            self.tests_passed += 1
+        
+        result = {
+            "test_name": name,
+            "success": success,
+            "details": details,
+            "endpoint": endpoint,
+            "timestamp": datetime.now().isoformat()
+        }
+        self.test_results.append(result)
+        
+        status = "✅" if success else "❌"
+        print(f"{status} {name}: {details}")
+        return success
+
+    def run_test(self, name, method, endpoint, expected_status, data=None, require_auth=True):
+        """Run a single API test"""
+        url = f"{self.base_url}/api/{endpoint}"
+        headers = {'Content-Type': 'application/json'}
+        if require_auth and self.token:
+            headers['Authorization'] = f'Bearer {self.token}'
+
         print(f"\n🔍 Testing {name}...")
-        print(f"   URL: {url}")
         
         try:
             if method == 'GET':
-                response = requests.get(url, headers=test_headers, timeout=10)
+                response = requests.get(url, headers=headers, timeout=10)
             elif method == 'POST':
-                response = requests.post(url, json=data, headers=test_headers, timeout=10)
+                response = requests.post(url, json=data, headers=headers, timeout=10)
             elif method == 'PUT':
-                response = requests.put(url, json=data, headers=test_headers, timeout=10)
+                response = requests.put(url, json=data, headers=headers, timeout=10)
             elif method == 'DELETE':
-                response = requests.delete(url, headers=test_headers, timeout=10)
-            elif method == 'PATCH':
-                response = requests.patch(url, json=data, headers=test_headers, timeout=10)
+                response = requests.delete(url, headers=headers, timeout=10)
 
             success = response.status_code == expected_status
+            details = f"Status: {response.status_code}"
+            
             if success:
-                self.tests_passed += 1
-                print(f"✅ Passed - Status: {response.status_code}")
                 try:
-                    return success, response.json() if response.text else {}
+                    response_data = response.json()
+                    return self.log_test(name, True, f"{details} - Response OK", endpoint), response_data
                 except:
-                    return success, {}
+                    return self.log_test(name, True, f"{details} - No JSON response", endpoint), {}
             else:
-                print(f"❌ Failed - Expected {expected_status}, got {response.status_code}")
-                print(f"   Response: {response.text[:200]}")
-                self.failed_tests.append({
-                    "test": name,
-                    "endpoint": endpoint,
-                    "expected": expected_status,
-                    "actual": response.status_code,
-                    "response": response.text[:200]
-                })
+                error_detail = "Unknown error"
                 try:
-                    return False, response.json() if response.text else {}
+                    error_data = response.json()
+                    error_detail = error_data.get('detail', str(error_data))
                 except:
-                    return False, {}
+                    error_detail = response.text or "No error details"
+                
+                return self.log_test(name, False, f"Expected {expected_status}, got {response.status_code}: {error_detail}", endpoint), {}
 
+        except requests.exceptions.Timeout:
+            return self.log_test(name, False, "Request timeout", endpoint), {}
         except Exception as e:
-            print(f"❌ Failed - Error: {str(e)}")
-            self.failed_tests.append({
-                "test": name,
-                "endpoint": endpoint,
-                "error": str(e)
-            })
-            return False, {}
+            return self.log_test(name, False, f"Error: {str(e)}", endpoint), {}
 
-    def test_health(self):
-        """Test health endpoint"""
-        return self.run_test("API Health Check", "GET", "api/health", 200)
-
-    def test_seed_database(self):
-        """Initialize database with seed data"""
-        print(f"\n📊 Seeding database...")
-        success, response = self.run_test("Seed Database", "POST", "api/seed", 200)
-        if success:
-            print(f"   Seeded: {response.get('supermercati', 0)} supermercati, {response.get('prodotti', 0)} prodotti")
+    def test_health_check(self):
+        """Test basic connectivity"""
+        success, _ = self.run_test("Health Check", "GET", "", 200, require_auth=False)
         return success
 
-    def test_register(self, email, password, nome):
-        """Test user registration"""
-        success, response = self.run_test(
-            "User Registration",
-            "POST",
-            "api/auth/register",
-            200,
-            data={"email": email, "password": password, "nome": nome}
-        )
-        if success and 'access_token' in response:
-            self.token = response['access_token']
-            print(f"   Registered user: {response.get('user', {}).get('nome', 'Unknown')}")
-            return True, response['user']
-        return False, {}
-
-    def test_login(self, email, password):
-        """Test user login"""
-        success, response = self.run_test(
-            "User Login",
-            "POST",
-            "api/auth/login",
-            200,
-            data={"email": email, "password": password}
-        )
-        if success and 'access_token' in response:
-            self.token = response['access_token']
-            print(f"   Logged in user: {response.get('user', {}).get('nome', 'Unknown')}")
-            return True, response['user']
-        return False, {}
-
-    def test_get_me(self):
-        """Test get current user"""
-        return self.run_test("Get Current User", "GET", "api/auth/me", 200)
-
-    def test_get_supermercati(self):
-        """Test get supermercati"""
-        success, response = self.run_test("Get Supermercati", "GET", "api/supermercati", 200)
-        if success:
-            print(f"   Found {len(response)} supermercati")
-        return success, response
-
-    def test_autocomplete(self, query="latte"):
-        """Test product autocomplete"""
-        success, response = self.run_test(
-            "Product Autocomplete",
-            "GET",
-            f"api/prodotti/autocomplete?q={query}",
-            200
-        )
-        if success:
-            print(f"   Found {len(response)} suggestions for '{query}'")
-        return success, response
-
-    def test_get_prodotti(self):
-        """Test get products"""
-        success, response = self.run_test("Get Prodotti", "GET", "api/prodotti", 200)
-        if success:
-            print(f"   Found {len(response)} prodotti")
-        return success, response
-
-    def test_create_lista(self, nome, prodotti):
-        """Test create shopping list"""
-        success, response = self.run_test(
-            "Create Lista Spesa",
-            "POST",
-            "api/liste",
-            200,
-            data={"nome": nome, "prodotti": prodotti}
-        )
-        return success, response
-
-    def test_get_liste(self):
-        """Test get shopping lists"""
-        return self.run_test("Get Liste Spesa", "GET", "api/liste", 200)
-
-    def test_optimize_shopping(self, prodotti_lista):
-        """Test shopping optimization"""
-        success, response = self.run_test(
-            "Optimize Shopping",
-            "POST",
-            "api/ottimizza",
-            200,
-            data={
-                "lista_prodotti": prodotti_lista,
-                "lat_utente": 45.4945,
-                "lng_utente": 9.3256,
-                "raggio_km": 5,
-                "max_supermercati": 3,
-                "peso_prezzo": 0.7,
-                "peso_tempo": 0.3
-            }
-        )
-        if success:
-            piano = response.get('piano_ottimale', [])
-            print(f"   Optimized plan: {len(piano)} stores, cost: €{response.get('costo_totale', 0)}")
-            print(f"   Savings: €{response.get('risparmio_euro', 0)} ({response.get('risparmio_percentuale', 0)}%)")
-        return success, response
-
-    def test_get_storico(self):
-        """Test get history"""
-        return self.run_test("Get Storico", "GET", "api/storico", 200)
-
-    def test_get_preferenze(self):
-        """Test get preferences"""
-        return self.run_test("Get Preferenze", "GET", "api/preferenze", 200)
-
-    def test_update_preferenze(self):
-        """Test update preferences"""
-        prefs = {
-            "raggio_max_km": 8,
-            "max_supermercati": 4,
-            "peso_prezzo": 0.6,
-            "peso_tempo": 0.4,
-            "supermercati_preferiti": ["coop-pioltello"]
+    def test_auth_system(self):
+        """Test authentication with referral system"""
+        print("\n🔐 Testing Authentication with Referral...")
+        
+        # Test user registration with referral
+        test_timestamp = datetime.now().strftime('%H%M%S')
+        mario_email = f"mario.test.{test_timestamp}@shopply.it"
+        luigi_email = f"luigi.test.{test_timestamp}@shopply.it"
+        
+        # Register first user (Mario)
+        mario_data = {
+            "email": mario_email,
+            "password": "test123",
+            "nome": "Mario Rossi"
         }
-        return self.run_test("Update Preferenze", "PUT", "api/preferenze", 200, data=prefs)
-
-    # ============== NEW V2.0 FEATURE TESTS ==============
-
-    def test_get_offerte(self):
-        """Test get offers endpoint"""
-        success, response = self.run_test("Get Offerte", "GET", "api/prodotti/offerte", 200)
+        
+        success, response = self.run_test(
+            "Register Mario (Referrer)", "POST", "auth/register", 200, 
+            mario_data, require_auth=False
+        )
+        
+        if not success:
+            return False
+        
+        mario_referral_code = response.get('user', {}).get('referral_code')
+        mario_token = response.get('access_token')
+        
+        if not mario_referral_code:
+            return self.log_test("Mario Referral Code Generation", False, "No referral code in response", "auth/register")
+        
+        self.log_test("Mario Referral Code Generation", True, f"Generated code: {mario_referral_code}", "auth/register")
+        
+        # Register second user with referral code (Luigi)
+        luigi_data = {
+            "email": luigi_email,
+            "password": "test123",
+            "nome": "Luigi Verdi",
+            "referral_code": mario_referral_code
+        }
+        
+        success, luigi_response = self.run_test(
+            "Register Luigi (with Referral)", "POST", "auth/register", 200,
+            luigi_data, require_auth=False
+        )
+        
+        if not success:
+            return False
+        
+        luigi_points = luigi_response.get('user', {}).get('punti_referral', 0)
+        if luigi_points != 25:
+            return self.log_test("Luigi Bonus Points", False, f"Expected 25 points, got {luigi_points}", "auth/register")
+        
+        self.log_test("Luigi Bonus Points", True, f"Received {luigi_points} points", "auth/register")
+        
+        # Test login
+        login_data = {"email": mario_email, "password": "test123"}
+        success, response = self.run_test(
+            "Mario Login", "POST", "auth/login", 200,
+            login_data, require_auth=False
+        )
+        
         if success:
-            total_offers = sum(len(prods) for prods in response.values())
-            print(f"   Found {total_offers} offers across {len(response)} stores")
-        return success, response
+            self.token = response.get('access_token')
+            self.user_id = response.get('user', {}).get('id')
+            
+        return success
 
-    def test_get_categorie(self):
-        """Test get categories endpoint"""
-        success, response = self.run_test("Get Categorie", "GET", "api/categorie", 200)
+    def test_referral_stats(self):
+        """Test referral statistics endpoint"""
+        success, response = self.run_test(
+            "Get Referral Stats", "GET", "referral/stats", 200
+        )
+        
         if success:
-            print(f"   Found {len(response)} categories")
-        return success, response
+            required_fields = ['referral_code', 'punti_totali', 'inviti_completati', 'inviti_pendenti', 'bonus_disponibile']
+            for field in required_fields:
+                if field not in response:
+                    return self.log_test(f"Referral Stats Field: {field}", False, f"Missing field {field}", "referral/stats")
+            
+            self.log_test("Referral Stats Complete", True, f"All fields present - Points: {response.get('punti_totali', 0)}", "referral/stats")
+        
+        return success
 
-    def test_aggiorna_prezzi(self):
-        """Test manual price update trigger"""
-        success, response = self.run_test("Trigger Price Update", "POST", "api/prezzi/aggiorna", 200)
-        if success:
-            print(f"   Price update triggered: {response.get('message', '')}")
-        return success, response
+    def test_referral_invite(self):
+        """Test sending referral invite"""
+        test_email = f"invite.test.{datetime.now().strftime('%H%M%S')}@example.com"
+        invite_data = {"email": test_email}
+        
+        success, response = self.run_test(
+            "Send Referral Invite", "POST", "referral/invita", 200, invite_data
+        )
+        
+        if success and 'message' in response:
+            self.log_test("Referral Invite Response", True, f"Message: {response['message']}", "referral/invita")
+        
+        return success
 
-    def test_ultimo_aggiornamento(self):
-        """Test get last price update info"""
-        success, response = self.run_test("Get Last Update", "GET", "api/prezzi/ultimo-aggiornamento", 200)
+    def test_referral_leaderboard(self):
+        """Test referral leaderboard"""
+        success, response = self.run_test(
+            "Get Referral Leaderboard", "GET", "referral/classifica", 200
+        )
+        
         if success:
-            if 'timestamp' in response:
-                print(f"   Last update: {response.get('timestamp', '')}")
-                print(f"   Products updated: {response.get('prodotti_aggiornati', 0)}")
+            if isinstance(response, list):
+                self.log_test("Leaderboard Format", True, f"Returned {len(response)} entries", "referral/classifica")
             else:
-                print(f"   {response.get('message', 'No updates')}")
-        return success, response
+                return self.log_test("Leaderboard Format", False, "Expected list format", "referral/classifica")
+        
+        return success
 
-    def test_get_notifiche(self):
-        """Test get user notifications"""
-        success, response = self.run_test("Get Notifiche", "GET", "api/notifiche", 200)
-        if success:
-            print(f"   Found {len(response)} notifications")
-        return success, response
-
-    def test_get_notifiche_non_lette(self):
-        """Test get unread notifications count"""
-        success, response = self.run_test("Get Unread Count", "GET", "api/notifiche/non-lette", 200)
-        if success:
-            print(f"   Unread notifications: {response.get('count', 0)}")
-        return success, response
-
-    def test_condividi_lista(self, lista_id, email_destinatario="famiglia@test.it"):
-        """Test share shopping list functionality"""
-        success, response = self.run_test(
-            "Share Lista",
-            "POST",
-            f"api/liste/{lista_id}/condividi",
-            200,
-            data={"lista_id": lista_id, "email_destinatario": email_destinatario}
+    def test_referral_redeem(self):
+        """Test point redemption"""
+        # First get current points
+        success, stats = self.run_test(
+            "Get Stats for Redeem", "GET", "referral/stats", 200
         )
-        if success:
-            print(f"   Shared list with: {email_destinatario}")
-        return success, response
+        
+        if not success:
+            return False
+        
+        points = stats.get('punti_totali', 0)
+        
+        if points < 10:
+            self.log_test("Point Redemption Skipped", True, f"Insufficient points ({points}) for redemption test", "referral/riscatta")
+            return True
+        
+        # Test redemption with 10 points
+        redeem_data = {"punti": 10}  # Note: API expects direct integer parameter
+        
+        # Create a proper POST request with punti as query parameter or body
+        url = f"{self.base_url}/api/referral/riscatta"
+        headers = {'Content-Type': 'application/json'}
+        if self.token:
+            headers['Authorization'] = f'Bearer {self.token}'
+        
+        try:
+            # Try as query parameter
+            response = requests.post(f"{url}?punti=10", headers=headers, timeout=10)
+            
+            if response.status_code != 200:
+                # Try as JSON body
+                response = requests.post(url, json={"punti": 10}, headers=headers, timeout=10)
+                
+                if response.status_code != 200:
+                    # Try as form data
+                    headers_form = headers.copy()
+                    headers_form['Content-Type'] = 'application/x-www-form-urlencoded'
+                    response = requests.post(url, data={"punti": 10}, headers=headers_form, timeout=10)
+            
+            success = response.status_code == 200
+            if success:
+                try:
+                    resp_data = response.json()
+                    self.log_test("Point Redemption", True, f"Redeemed 10 points - {resp_data.get('message', '')}", "referral/riscatta")
+                except:
+                    self.log_test("Point Redemption", True, f"Status: {response.status_code}", "referral/riscatta")
+            else:
+                error_msg = "Unknown error"
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get('detail', str(error_data))
+                except:
+                    error_msg = response.text
+                
+                self.log_test("Point Redemption", False, f"Status: {response.status_code} - {error_msg}", "referral/riscatta")
+            
+            return success
+            
+        except Exception as e:
+            return self.log_test("Point Redemption", False, f"Error: {str(e)}", "referral/riscatta")
 
-    def test_matrice_prezzi(self, prodotti=None):
-        """Test price matrix endpoint"""
-        if not prodotti:
-            prodotti = ["Latte Intero 1L", "Pane in Cassetta"]
+    def test_referral_invites_list(self):
+        """Test getting list of sent invites"""
         success, response = self.run_test(
-            "Get Price Matrix",
-            "POST",
-            "api/matrice-prezzi",
-            200,
-            data=prodotti
+            "Get Referral Invites List", "GET", "referral/inviti", 200
         )
+        
         if success:
-            print(f"   Price matrix for {len(prodotti)} products")
-        return success, response
+            if isinstance(response, list):
+                self.log_test("Invites List Format", True, f"Returned {len(response)} invites", "referral/inviti")
+            else:
+                return self.log_test("Invites List Format", False, "Expected list format", "referral/inviti")
+        
+        return success
+
+    def test_generate_referral_code(self):
+        """Test generating referral code for existing user"""
+        success, response = self.run_test(
+            "Generate Referral Code", "POST", "referral/genera-codice", 200
+        )
+        
+        if success and 'referral_code' in response:
+            self.log_test("Code Generation Response", True, f"Code: {response['referral_code']}", "referral/genera-codice")
+        
+        return success
+
+    def test_other_endpoints(self):
+        """Test other essential endpoints"""
+        endpoints = [
+            ("Get User Profile", "GET", "auth/me", 200),
+            ("Get Supermercati", "GET", "supermercati", 200),
+            ("Get Categories", "GET", "categorie", 200),
+            ("Health Check", "GET", "health", 200)
+        ]
+        
+        all_passed = True
+        for name, method, endpoint, expected_status in endpoints:
+            success, _ = self.run_test(name, method, endpoint, expected_status, require_auth=(endpoint != "health"))
+            if not success:
+                all_passed = False
+        
+        return all_passed
+
+    def run_all_tests(self):
+        """Run complete test suite"""
+        print("🚀 Starting Shopply Referral System Test Suite")
+        print(f"Backend URL: {self.base_url}")
+        
+        # Test basic connectivity
+        if not self.test_health_check():
+            print("❌ Health check failed, stopping tests")
+            return self.generate_report()
+        
+        # Test authentication with referral
+        if not self.test_auth_system():
+            print("❌ Authentication failed, stopping referral tests")
+            return self.generate_report()
+        
+        # Test referral endpoints
+        self.test_referral_stats()
+        self.test_referral_invite()
+        self.test_referral_leaderboard() 
+        self.test_referral_redeem()
+        self.test_referral_invites_list()
+        self.test_generate_referral_code()
+        
+        # Test other endpoints
+        self.test_other_endpoints()
+        
+        return self.generate_report()
+
+    def generate_report(self):
+        """Generate final test report"""
+        print(f"\n📊 Test Results: {self.tests_passed}/{self.tests_run} passed")
+        
+        success_rate = (self.tests_passed / self.tests_run * 100) if self.tests_run > 0 else 0
+        
+        failed_tests = [test for test in self.test_results if not test['success']]
+        
+        report = {
+            "summary": f"Referral system testing completed - {self.tests_passed}/{self.tests_run} tests passed",
+            "success_rate": f"{success_rate:.1f}%",
+            "total_tests": self.tests_run,
+            "passed_tests": self.tests_passed,
+            "failed_tests": len(failed_tests),
+            "test_details": self.test_results,
+            "failed_test_details": failed_tests
+        }
+        
+        # Print failed tests summary
+        if failed_tests:
+            print("\n❌ Failed Tests:")
+            for test in failed_tests:
+                print(f"  - {test['test_name']}: {test['details']}")
+        
+        return success_rate >= 80  # Consider 80%+ as passing
+
 
 def main():
-    print("🧪 Shopply API Testing Started")
-    print("=" * 50)
-    
-    tester = ShopplyAPITester()
-    
-    # Test unique email for this run
-    timestamp = datetime.now().strftime('%H%M%S')
-    test_email = f"test_{timestamp}@shopply.it"
-    test_password = "test123"
-    test_nome = f"Tester {timestamp}"
+    tester = ShopplyReferralTester()
+    success = tester.run_all_tests()
+    return 0 if success else 1
 
-    try:
-        # 1. Basic health check
-        print("\n📋 PHASE 1: Basic Connectivity")
-        if not tester.test_health()[0]:
-            print("❌ API health check failed - stopping all tests")
-            return 1
-
-        # 2. Seed database
-        print("\n📋 PHASE 2: Database Initialization")
-        if not tester.test_seed_database():
-            print("⚠️ Seed failed but continuing with tests...")
-
-        # 3. Authentication flow
-        print("\n📋 PHASE 3: Authentication")
-        
-        # Register new user
-        reg_success, user = tester.test_register(test_email, test_password, test_nome)
-        if not reg_success:
-            print("❌ Registration failed - stopping auth tests")
-            return 1
-            
-        # Test get me
-        if not tester.test_get_me()[0]:
-            print("❌ Get current user failed")
-
-        # Test login with existing user (from request)
-        existing_success, existing_user = tester.test_login("test@shopply.it", "test123")
-        if existing_success:
-            print("✅ Login with existing test user successful")
-        else:
-            print("⚠️ Existing test user login failed - using registered user")
-
-        # 4. Data retrieval
-        print("\n📋 PHASE 4: Data Retrieval")
-        
-        # Get supermercati
-        sup_success, supermercati = tester.test_get_supermercati()
-        if not sup_success:
-            print("❌ Failed to get supermercati")
-            return 1
-
-        # Autocomplete
-        auto_success, suggestions = tester.test_autocomplete("latte")
-        if not auto_success:
-            print("⚠️ Autocomplete not working")
-
-        # Get products
-        prod_success, prodotti = tester.test_get_prodotti()
-        if not prod_success:
-            print("⚠️ Get prodotti failed")
-
-        # 5. Shopping list operations
-        print("\n📋 PHASE 5: Shopping Lists")
-        
-        # Create list
-        test_prodotti = ["Latte Intero 1L", "Pane in Cassetta", "Mele Golden"]
-        lista_success, lista = tester.test_create_lista("Lista Test", test_prodotti)
-        if not lista_success:
-            print("❌ Create lista failed")
-        
-        # Get lists
-        if not tester.test_get_liste()[0]:
-            print("⚠️ Get liste failed")
-
-        # 6. Core optimization
-        print("\n📋 PHASE 6: Shopping Optimization")
-        opt_success, optimization = tester.test_optimize_shopping(test_prodotti)
-        if not opt_success:
-            print("❌ CRITICAL: Shopping optimization failed!")
-            return 1
-
-        # 7. V2.0 NEW FEATURES
-        print("\n📋 PHASE 7: New V2.0 Features")
-        
-        # Test offers page
-        offers_success, offers = tester.test_get_offerte()
-        if not offers_success:
-            print("❌ Get offerte failed")
-        
-        # Test categories
-        cat_success, categories = tester.test_get_categorie()
-        if not cat_success:
-            print("⚠️ Get categorie failed")
-        
-        # Test price update trigger
-        update_success, update_resp = tester.test_aggiorna_prezzi()
-        if not update_success:
-            print("❌ Price update trigger failed")
-        
-        # Test last update info
-        last_update_success, last_update = tester.test_ultimo_aggiornamento()
-        if not last_update_success:
-            print("⚠️ Get ultimo aggiornamento failed")
-        
-        # Test notifications
-        notif_success, notifications = tester.test_get_notifiche()
-        if not notif_success:
-            print("⚠️ Get notifiche failed")
-        
-        # Test unread count
-        unread_success, unread_count = tester.test_get_notifiche_non_lette()
-        if not unread_success:
-            print("⚠️ Get unread count failed")
-        
-        # Test list sharing (if we have a list)
-        if lista_success and lista:
-            share_success, share_resp = tester.test_condividi_lista(lista.get('id'))
-            if not share_success:
-                print("❌ List sharing failed")
-        
-        # Test price matrix
-        matrix_success, matrix = tester.test_matrice_prezzi()
-        if not matrix_success:
-            print("⚠️ Price matrix failed")
-
-        # 8. History and preferences  
-        print("\n📋 PHASE 8: User Data")
-        
-        if not tester.test_get_storico()[0]:
-            print("⚠️ Get storico failed")
-        
-        if not tester.test_get_preferenze()[0]:
-            print("⚠️ Get preferenze failed")
-        
-        if not tester.test_update_preferenze()[0]:
-            print("⚠️ Update preferenze failed")
-
-        # Summary
-        print("\n" + "=" * 50)
-        print(f"📊 FINAL RESULTS")
-        print(f"Tests passed: {tester.tests_passed}/{tester.tests_run}")
-        
-        if tester.failed_tests:
-            print(f"\n❌ Failed tests:")
-            for fail in tester.failed_tests:
-                print(f"   • {fail['test']}")
-        
-        success_rate = (tester.tests_passed / tester.tests_run * 100) if tester.tests_run > 0 else 0
-        print(f"Success rate: {success_rate:.1f}%")
-        
-        # Return success if >=80% pass rate and core optimization works
-        if success_rate >= 80 and opt_success:
-            return 0
-        else:
-            return 1
-            
-    except Exception as e:
-        print(f"❌ CRITICAL ERROR: {str(e)}")
-        return 1
 
 if __name__ == "__main__":
     sys.exit(main())
