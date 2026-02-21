@@ -198,6 +198,83 @@ class ShopplyAPITester:
         }
         return self.run_test("Update Preferenze", "PUT", "api/preferenze", 200, data=prefs)
 
+    # ============== NEW V2.0 FEATURE TESTS ==============
+
+    def test_get_offerte(self):
+        """Test get offers endpoint"""
+        success, response = self.run_test("Get Offerte", "GET", "api/prodotti/offerte", 200)
+        if success:
+            total_offers = sum(len(prods) for prods in response.values())
+            print(f"   Found {total_offers} offers across {len(response)} stores")
+        return success, response
+
+    def test_get_categorie(self):
+        """Test get categories endpoint"""
+        success, response = self.run_test("Get Categorie", "GET", "api/categorie", 200)
+        if success:
+            print(f"   Found {len(response)} categories")
+        return success, response
+
+    def test_aggiorna_prezzi(self):
+        """Test manual price update trigger"""
+        success, response = self.run_test("Trigger Price Update", "POST", "api/prezzi/aggiorna", 200)
+        if success:
+            print(f"   Price update triggered: {response.get('message', '')}")
+        return success, response
+
+    def test_ultimo_aggiornamento(self):
+        """Test get last price update info"""
+        success, response = self.run_test("Get Last Update", "GET", "api/prezzi/ultimo-aggiornamento", 200)
+        if success:
+            if 'timestamp' in response:
+                print(f"   Last update: {response.get('timestamp', '')}")
+                print(f"   Products updated: {response.get('prodotti_aggiornati', 0)}")
+            else:
+                print(f"   {response.get('message', 'No updates')}")
+        return success, response
+
+    def test_get_notifiche(self):
+        """Test get user notifications"""
+        success, response = self.run_test("Get Notifiche", "GET", "api/notifiche", 200)
+        if success:
+            print(f"   Found {len(response)} notifications")
+        return success, response
+
+    def test_get_notifiche_non_lette(self):
+        """Test get unread notifications count"""
+        success, response = self.run_test("Get Unread Count", "GET", "api/notifiche/non-lette", 200)
+        if success:
+            print(f"   Unread notifications: {response.get('count', 0)}")
+        return success, response
+
+    def test_condividi_lista(self, lista_id, email_destinatario="famiglia@test.it"):
+        """Test share shopping list functionality"""
+        success, response = self.run_test(
+            "Share Lista",
+            "POST",
+            f"api/liste/{lista_id}/condividi",
+            200,
+            data={"lista_id": lista_id, "email_destinatario": email_destinatario}
+        )
+        if success:
+            print(f"   Shared list with: {email_destinatario}")
+        return success, response
+
+    def test_matrice_prezzi(self, prodotti=None):
+        """Test price matrix endpoint"""
+        if not prodotti:
+            prodotti = ["Latte Intero 1L", "Pane in Cassetta"]
+        success, response = self.run_test(
+            "Get Price Matrix",
+            "POST",
+            "api/matrice-prezzi",
+            200,
+            data=prodotti
+        )
+        if success:
+            print(f"   Price matrix for {len(prodotti)} products")
+        return success, response
+
 def main():
     print("🧪 Shopply API Testing Started")
     print("=" * 50)
