@@ -945,7 +945,7 @@ async def aggiorna_prezzi_task():
     await db.aggiornamenti_prezzi.insert_one({
         "id": str(uuid.uuid4()),
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "prodotti_aggiornati": len(updates),
+        "prodotti_aggiornati": len(operations),
         "nuove_offerte": len(nuove_offerte)
     })
 
