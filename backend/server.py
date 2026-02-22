@@ -469,10 +469,11 @@ async def invita_referral(invito: ReferralInvito, current_user: dict = Depends(g
     }
     await db.referrals.insert_one(referral_doc)
     
+    app_url = os.environ.get('APP_URL', '')
     return {
         "message": f"Invito inviato a {invito.email}",
         "referral_code": current_user.get("referral_code"),
-        "link": f"https://shopply.app/register?ref={current_user.get('referral_code')}"
+        "link": f"{app_url}/register?ref={current_user.get('referral_code')}"
     }
 
 @api_router.post("/referral/genera-codice")
