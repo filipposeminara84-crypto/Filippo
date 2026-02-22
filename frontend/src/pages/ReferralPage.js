@@ -51,7 +51,7 @@ export default function ReferralPage() {
     const shareData = {
       title: 'Shopply - Risparmia sulla spesa!',
       text: `Usa il mio codice ${stats?.referral_code} per registrarti su Shopply e ricevi ${stats?.punti_per_registrazione} punti bonus!`,
-      url: `https://shopply.app/register?ref=${stats?.referral_code}`
+      url: `${window.location.origin}/register?ref=${stats?.referral_code}`
     };
     
     if (navigator.share) {
