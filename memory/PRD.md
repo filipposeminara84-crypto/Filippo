@@ -1,14 +1,12 @@
 # Shopply v2.1 - Product Requirements Document
 
+## Status: ✅ DEPLOYMENT READY
+
 ## Problema
 Famiglie italiane spendono tempo confrontando volantini e pianificando la spesa settimanale.
 
 ## Soluzione
 App web per ottimizzazione spesa multi-supermercato con aggiornamento prezzi automatico, condivisione familiare e programma referral.
-
-## Target Audience
-- Famiglie italiane area Pioltello/Segrate
-- Utenti attenti al risparmio
 
 ## Tech Stack
 - Frontend: React 19, TailwindCSS, Framer Motion, React-Leaflet
@@ -17,27 +15,23 @@ App web per ottimizzazione spesa multi-supermercato con aggiornamento prezzi aut
 - Mappe: Leaflet + OpenStreetMap
 - Auth: JWT Email/Password
 
-## v2.1 Features - Programma Referral ✅
-### Sistema Referral
-- [x] Codice referral univoco per utente (formato: ABC12XYZ)
-- [x] Punti bonus: 50 punti per invitante, 25 punti per invitato
-- [x] 10 punti = €1 di sconto
-- [x] Dashboard referral con statistiche complete
-- [x] Copia/condividi codice referral
-- [x] Invito via email con tracking
+## Features Implementate
+### v2.1 - Programma Referral
+- [x] Codice referral univoco per utente
+- [x] Bonus: 50 punti invitante, 25 punti invitato
+- [x] 10 punti = €1 sconto riscattabile
+- [x] Dashboard referral completa
 - [x] Classifica Top Referrer
-- [x] Riscatto punti come sconto
-- [x] Pre-compilazione codice da URL (?ref=CODICE)
-- [x] Notifiche per registrazioni e bonus
+- [x] Pre-compilazione codice da URL
 
-### v2.0 Features (precedenti)
-- [x] Database espanso: 1477 prodotti, 7 supermercati, 12 categorie
-- [x] Aggiornamento prezzi automatico con offerte
+### v2.0 - Espansione
+- [x] 1477 prodotti, 7 supermercati, 12 categorie
+- [x] Aggiornamento prezzi automatico (bulk write ottimizzato)
 - [x] Sistema notifiche in-app
 - [x] Condivisione liste familiari
 - [x] Pagina offerte del giorno
 
-### v1.0 MVP Features
+### v1.0 - MVP
 - [x] Auth JWT email/password
 - [x] Input lista spesa con autocomplete
 - [x] Algoritmo ottimizzazione greedy
@@ -45,27 +39,29 @@ App web per ottimizzazione spesa multi-supermercato con aggiornamento prezzi aut
 - [x] Storico ricerche
 - [x] Impostazioni preferenze
 
-## API Referral Program
-- GET /api/referral/stats - Statistiche utente
-- GET /api/referral/inviti - Lista inviti
-- POST /api/referral/invita - Invia invito
-- POST /api/referral/riscatta - Riscatta punti
-- POST /api/referral/genera-codice - Genera codice per utenti esistenti
-- GET /api/referral/classifica - Top 10 referrer
+## Deployment Checks ✅
+- [x] No hardcoded URLs/secrets
+- [x] Environment variables configured
+- [x] Query optimizations applied
+- [x] Database indexes configured
+- [x] CORS properly set
+- [x] Supervisor config valid
 
-## Test Results v2.1
-- Backend: 100% (22/22 endpoints)
-- Frontend: 95%
-- Integration: 100%
-
-## Backlog P1
+## Backlog P1 (Future)
+- [ ] Integrazione assistenti vocali (Google/Alexa/Siri) - richiede API keys
 - [ ] Push notifications PWA
 - [ ] Input vocale lista
 - [ ] Scan barcode
 - [ ] Web scraping prezzi reali
-- [ ] Livelli VIP referral (Bronze/Silver/Gold)
+- [ ] Livelli VIP referral
+
+## Test Results
+- Backend: 100%
+- Frontend: 95%
+- Integration: 100%
+- Deployment: READY
 
 ## Dates
-- 21/02/2026: MVP completato
-- 21/02/2026: v2.0 (DB espanso, prezzi auto, notifiche, condivisione)
-- 21/02/2026: v2.1 Programma Referral
+- 21/02/2026: MVP
+- 21/02/2026: v2.0 
+- 21/02/2026: v2.1 + Deployment Ready
