@@ -614,7 +614,12 @@ async def autocomplete_prodotti(q: str):
 @api_router.get("/prodotti/offerte")
 async def get_offerte():
     """Restituisce prodotti in offerta raggruppati per supermercato"""
-    offerte = await db.prodotti.find({"in_offerta": True}, {"_id": 0}).to_list(500)
+    # Optimized with projection and limit
+    offerte = await db.prodotti.find(
+        {"in_offerta": True}, 
+        {"_id": 0, "nome_prodotto": 1, "categoria": 1, "brand": 1, "formato": 1,
+         "supermercato_id": 1, "prezzo": 1, "prezzo_precedente": 1, "sconto_percentuale": 1}
+    ).limit(200).to_list(200)
     
     # Raggruppa per supermercato
     by_store = {}
