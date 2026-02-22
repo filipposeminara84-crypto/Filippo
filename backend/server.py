@@ -875,9 +875,15 @@ async def aggiorna_prezzi_manuale(background_tasks: BackgroundTasks):
 
 async def aggiorna_prezzi_task():
     """Task per aggiornare i prezzi con variazioni realistiche"""
-    prodotti = await db.prodotti.find({}, {"_id": 0}).to_list(10000)
+    from pymongo import UpdateOne
     
-    updates = []
+    # OPTIMIZED: Use projection and process in batches
+    prodotti = await db.prodotti.find(
+        {}, 
+        {"_id": 0, "id": 1, "nome_prodotto": 1, "prezzo": 1, "supermercato_id": 1}
+    ).to_list(5000)
+    
+    operations = []
     nuove_offerte = []
     
     for prod in prodotti:
@@ -902,26 +908,28 @@ async def aggiorna_prezzi_task():
                 "prezzo_vecchio": prezzo_attuale
             })
         
-        updates.append({
-            "filter": {"id": prod["id"]},
-            "update": {
-                "$set": {
-                    "prezzo": nuovo_prezzo,
-                    "prezzo_precedente": prezzo_precedente,
-                    "in_offerta": in_offerta,
-                    "sconto_percentuale": sconto,
-                    "data_aggiornamento": datetime.now(timezone.utc).isoformat()
-                }
-            }
-        })
+        # OPTIMIZED: Use UpdateOne for bulk_write
+        operations.append(UpdateOne(
+            {"id": prod["id"]},
+            {"$set": {
+                "prezzo": nuovo_prezzo,
+                "prezzo_precedente": prezzo_precedente,
+                "in_offerta": in_offerta,
+                "sconto_percentuale": sconto,
+                "data_aggiornamento": datetime.now(timezone.utc).isoformat()
+            }}
+        ))
     
-    # Batch update
-    for upd in updates:
-        await db.prodotti.update_one(upd["filter"], upd["update"])
+    # OPTIMIZED: Bulk write instead of individual updates
+    if operations:
+        await db.prodotti.bulk_write(operations)
     
-    # Create notifications for users with offers enabled
+    # Create notifications for users with offers enabled (limited)
     if nuove_offerte:
-        users = await db.utenti.find({"preferenze.notifiche_offerte": True}, {"_id": 0, "id": 1}).to_list(1000)
+        users = await db.utenti.find(
+            {"preferenze.notifiche_offerte": True}, 
+            {"_id": 0, "id": 1}
+        ).limit(500).to_list(500)
         top_offerte = sorted(nuove_offerte, key=lambda x: x["sconto"], reverse=True)[:5]
         
         for user in users:
