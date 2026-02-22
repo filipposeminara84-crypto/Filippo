@@ -1340,11 +1340,17 @@ async def seed_database():
     await db.supermercati.insert_many(supermercati_data)
     await db.prodotti.insert_many(prodotti_data)
     
-    # Create indexes
+    # Create indexes for query optimization
     await db.prodotti.create_index("nome_prodotto")
     await db.prodotti.create_index("categoria")
     await db.prodotti.create_index("supermercato_id")
     await db.prodotti.create_index("in_offerta")
+    await db.prodotti.create_index("id")
+    await db.utenti.create_index("email")
+    await db.utenti.create_index("referral_code")
+    await db.notifiche.create_index([("utente_id", 1), ("letta", 1)])
+    await db.referrals.create_index("invitante_id")
+    await db.liste_spesa.create_index("utente_id")
     
     return {
         "message": "Database popolato con successo",
