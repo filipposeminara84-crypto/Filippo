@@ -963,7 +963,12 @@ async def ottimizza_spesa(req: OttimizzaRequest, current_user: dict = Depends(ge
     if not supermercati_vicini:
         raise HTTPException(status_code=400, detail="Nessun supermercato trovato nel raggio specificato")
     
-    prodotti_db = await db.prodotti.find({}, {"_id": 0}).to_list(10000)
+    # OPTIMIZED: Query only products matching requested names with projection
+    prodotti_richiesti_lower = [p.lower() for p in req.lista_prodotti]
+    prodotti_db = await db.prodotti.find(
+        {"nome_prodotto": {"$regex": f"^({'|'.join(req.lista_prodotti)})$", "$options": "i"}},
+        {"_id": 0, "nome_prodotto": 1, "supermercato_id": 1, "prezzo": 1, "in_offerta": 1}
+    ).to_list(500)
     
     prezzi_map = {}
     for prod in prodotti_db:
