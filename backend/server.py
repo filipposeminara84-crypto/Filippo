@@ -592,7 +592,12 @@ async def get_prodotti(categoria: Optional[str] = None, search: Optional[str] = 
         query["nome_prodotto"] = {"$regex": search, "$options": "i"}
     if in_offerta:
         query["in_offerta"] = True
-    prodotti = await db.prodotti.find(query, {"_id": 0}).to_list(1000)
+    # Optimized with projection and limit
+    prodotti = await db.prodotti.find(
+        query, 
+        {"_id": 0, "id": 1, "nome_prodotto": 1, "categoria": 1, "brand": 1, "formato": 1, 
+         "supermercato_id": 1, "prezzo": 1, "in_offerta": 1, "sconto_percentuale": 1, "data_aggiornamento": 1}
+    ).limit(200).to_list(200)
     return prodotti
 
 @api_router.get("/prodotti/autocomplete")
