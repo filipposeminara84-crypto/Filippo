@@ -8,24 +8,19 @@ jobs:
     - uses: actions/setup-node@v4
       with:
         node-version: 20
-    - name: Cache node modules
-      uses: actions/cache@v4
-      with:
-        path: frontend/node_modules
-        key: ${{ runner.os }}-node-${{ hashFiles('**/yarn.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-node-
-    - name: Install deps
-      run: cd frontend && npm install --legacy-peer-deps
-    - name: Build
+    - name: Install frontend deps
+      run: |
+        cd frontend
+        npm install --legacy-peer-deps --no-audit --no-fund
+    - name: Build frontend
       run: cd frontend && npm run build
-    - name: Capacitor setup
-      run: cd frontend && npm install -g @capacitor/cli@5 --legacy-peer-deps
-    - name: Cap add
+    - name: Install Capacitor CLI
+      run: npm install -g @capacitor/cli@5 --legacy-peer-deps
+    - name: Capacitor add android
       run: cd frontend && npx cap add android
     - name: Cap sync
       run: cd frontend && npx cap copy
-    - name: Cap build
+    - name: Cap build android
       run: cd frontend && npx cap build android
     - name: Upload APK
       uses: actions/upload-artifact@v4
