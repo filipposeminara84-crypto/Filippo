@@ -1,0 +1,21 @@
+name: Build APK
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - run: cd frontend && npm ci --legacy-peer-deps
+    - run: cd frontend && npm run build
+    - uses: npx/cap/action@v1
+      with:
+        cli-command: 'add android'
+    - run: npx cap copy
+    - run: npx cap build android
+    - uses: actions/upload-artifact@v4
+      with:
+        name: app-debug.apk
+        path: android/app/build/outputs/apk/debug/*.apk
