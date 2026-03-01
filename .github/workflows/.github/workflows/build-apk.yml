@@ -1,8 +1,5 @@
 name: Build APK
-on:
-  workflow_dispatch:
-  push:
-    branches: [ main ]
+on: [workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -11,21 +8,24 @@ jobs:
     - uses: actions/setup-node@v4
       with:
         node-version: 20
-        cache: 'npm'
-    - name: Install frontend deps
-      run: cd frontend && npm ci --ignore-scripts
-    - name: Build frontend
-      run: cd frontend && npm run build
-    - name: Setup Capacitor
-      uses: nvm-sh/setup-nvm@v2
+    - name: Cache node modules
+      uses: actions/cache@v4
       with:
-        node-version: '20'
-    - run: npm install -g @capacitor/cli@5
-    - name: Capacitor add android
+        path: frontend/node_modules
+        key: ${{ runner.os }}-node-${{ hashFiles('**/yarn.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+    - name: Install deps
+      run: cd frontend && npm install --legacy-peer-deps
+    - name: Build
+      run: cd frontend && npm run build
+    - name: Capacitor setup
+      run: cd frontend && npm install -g @capacitor/cli@5 --legacy-peer-deps
+    - name: Cap add
       run: cd frontend && npx cap add android
     - name: Cap sync
       run: cd frontend && npx cap copy
-    - name: Cap build android
+    - name: Cap build
       run: cd frontend && npx cap build android
     - name: Upload APK
       uses: actions/upload-artifact@v4
