@@ -1,5 +1,8 @@
 name: Build APK
-on: [push]
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -7,15 +10,25 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
+        node-version: 20
+        cache: 'npm'
+    - name: Install frontend deps
+      run: cd frontend && npm ci --ignore-scripts
+    - name: Build frontend
+      run: cd frontend && npm run build
+    - name: Setup Capacitor
+      uses: nvm-sh/setup-nvm@v2
+      with:
         node-version: '20'
-    - run: cd frontend && npm ci --legacy-peer-deps
-    - run: cd frontend && npm run build
-    - uses: npx/cap/action@v1
+    - run: npm install -g @capacitor/cli@5
+    - name: Capacitor add android
+      run: cd frontend && npx cap add android
+    - name: Cap sync
+      run: cd frontend && npx cap copy
+    - name: Cap build android
+      run: cd frontend && npx cap build android
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
       with:
-        cli-command: 'add android'
-    - run: npx cap copy
-    - run: npx cap build android
-    - uses: actions/upload-artifact@v4
-      with:
-        name: app-debug.apk
-        path: android/app/build/outputs/apk/debug/*.apk
+        name: shopply.apk
+        path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
