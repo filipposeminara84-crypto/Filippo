@@ -5,22 +5,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
+    - name: Use Node.js
+      uses: actions/setup-node@v4
       with:
-        node-version: 20
-    - name: Install frontend deps
-      run: |
-        cd frontend
-        npm install --legacy-peer-deps --no-audit --no-fund
-    - name: Build frontend
+        node-version: '20'
+        cache: false  # Disabilita cache completamente
+    - name: Install deps frontend
+      run: cd frontend && npm install --legacy-peer-deps --no-audit
+    - name: Build React
       run: cd frontend && npm run build
-    - name: Install Capacitor CLI
+    - name: Install Cap CLI
       run: npm install -g @capacitor/cli@5 --legacy-peer-deps
-    - name: Capacitor add android
+    - name: Cap add android
       run: cd frontend && npx cap add android
     - name: Cap sync
       run: cd frontend && npx cap copy
-    - name: Cap build android
+    - name: Cap build
       run: cd frontend && npx cap build android
     - name: Upload APK
       uses: actions/upload-artifact@v4
