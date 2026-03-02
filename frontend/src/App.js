@@ -8,6 +8,7 @@ import StoricoPage from './pages/StoricoPage';
 import ImpostazioniPage from './pages/ImpostazioniPage';
 import OffertePage from './pages/OffertePage';
 import ReferralPage from './pages/ReferralPage';
+import InstallPWAPrompt from './components/InstallPWAPrompt';
 import './App.css';
 
 function PrivateRoute({ children }) {
@@ -86,6 +87,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
+        <InstallPWAPrompt />
       </AuthProvider>
     </BrowserRouter>
   );
