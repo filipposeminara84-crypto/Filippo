@@ -1,67 +1,57 @@
-# Shopply v2.1 - Product Requirements Document
+# Shopply - PRD (Product Requirements Document)
 
-## Status: ✅ DEPLOYMENT READY
+## Problema Originale
+App web per ottimizzare la spesa al supermercato, trovando i migliori prezzi tra più supermercati nella zona dell'utente (Area Pioltello).
 
-## Problema
-Famiglie italiane spendono tempo confrontando volantini e pianificando la spesa settimanale.
+## Stack Tecnologico
+- **Frontend**: React.js, TailwindCSS, Framer Motion, Leaflet, lucide-react
+- **Backend**: FastAPI, Python, MongoDB (motor), JWT auth
+- **Architettura**: SPA con REST API, PWA con offline capabilities
 
-## Soluzione
-App web per ottimizzazione spesa multi-supermercato con aggiornamento prezzi automatico, condivisione familiare e programma referral.
+## Funzionalità Implementate
 
-## Tech Stack
-- Frontend: React 19, TailwindCSS, Framer Motion, React-Leaflet
-- Backend: FastAPI (Python)
-- Database: MongoDB
-- Mappe: Leaflet + OpenStreetMap
-- Auth: JWT Email/Password
+### MVP (v1.0)
+- Autenticazione utente (email/password)
+- Creazione e gestione liste della spesa
+- Algoritmo di ottimizzazione prezzi
+- Mappa con posizioni supermercati e percorsi
+- Dati seed per supermercati e prodotti
 
-## Features Implementate
-### v2.1 - Programma Referral
-- [x] Codice referral univoco per utente
-- [x] Bonus: 50 punti invitante, 25 punti invitato
-- [x] 10 punti = €1 sconto riscattabile
-- [x] Dashboard referral completa
-- [x] Classifica Top Referrer
-- [x] Pre-compilazione codice da URL
+### V2.0
+- Database prodotti/supermercati espanso
+- Aggiornamento automatico prezzi + offerte speciali
+- Notifiche in-app per offerte
+- Condivisione liste con familiari
 
-### v2.0 - Espansione
-- [x] 1477 prodotti, 7 supermercati, 12 categorie
-- [x] Aggiornamento prezzi automatico (bulk write ottimizzato)
-- [x] Sistema notifiche in-app
-- [x] Condivisione liste familiari
-- [x] Pagina offerte del giorno
+### V2.1
+- Programma referral (punti/sconti per inviti)
+- PWA installabile con supporto offline
 
-### v1.0 - MVP
-- [x] Auth JWT email/password
-- [x] Input lista spesa con autocomplete
-- [x] Algoritmo ottimizzazione greedy
-- [x] Mappa interattiva percorso
-- [x] Storico ricerche
-- [x] Impostazioni preferenze
+### V2.2 (18 Marzo 2026)
+- **Flusso "Password Dimenticata"**: Link nella pagina login, endpoint backend per richiesta/verifica/reset, pagina dedicata al reset
+- **Correzione Geolocalizzazione**: enableHighAccuracy, timeout 10s, maximumAge 60s
+- **Fix Build Frontend**: Rimosso codice JSX duplicato in LoginPage.js, corretta struttura ternario
+- **Fix Import**: Corretto `@/` alias in index.js per compatibilità CRA build
+- **Route Reset Password**: Aggiunta route /reset-password in App.js
 
-## Deployment Checks ✅
-- [x] No hardcoded URLs/secrets
-- [x] Environment variables configured
-- [x] Query optimizations applied
-- [x] Database indexes configured
-- [x] CORS properly set
-- [x] Supervisor config valid
+## Schema DB Principale
+- **utenti**: {id, email, nome, hashed_password, referral_code, punti_referral}
+- **prodotti**: {id, nome_prodotto, supermercato_id, prezzo, categoria, in_offerta}
+- **supermercati**: {id, nome, catena, indirizzo, lat, lng}
+- **liste_spesa**: {id, utente_id, nome, prodotti}
+- **notifiche**: {id, utente_id, tipo, messaggio}
+- **famiglie**: {id, nome, creatore_id, membri}
+- **password_resets**: {email, token, expiry, used}
 
-## Backlog P1 (Future)
-- [ ] Integrazione assistenti vocali (Google/Alexa/Siri) - richiede API keys
-- [ ] Push notifications PWA
-- [ ] Input vocale lista
-- [ ] Scan barcode
-- [ ] Web scraping prezzi reali
-- [ ] Livelli VIP referral
+## Backlog Prioritizzato
 
-## Test Results
-- Backend: 100%
-- Frontend: 95%
-- Integration: 100%
-- Deployment: READY
+### P2 - Prossime
+- Missioni Giornaliere/Settimanali (engagement gamification)
 
-## Dates
-- 21/02/2026: MVP
-- 21/02/2026: v2.0 
-- 21/02/2026: v2.1 + Deployment Ready
+### P3 - Future
+- Integrazione Assistenti Vocali (Google Assistant, Alexa, Siri)
+
+## Note Tecniche
+- Email reset password è SIMULATA (stampa in console + notifica in-app + demo_token in risposta)
+- Backend monolitico in server.py (considerare suddivisione in moduli)
+- Tutti i componenti UI in italiano
