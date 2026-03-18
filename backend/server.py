@@ -392,6 +392,121 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         punti_referral=current_user.get("punti_referral", 0)
     )
 
+# ============== PASSWORD RECOVERY ==============
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(req: PasswordResetRequest):
+    """Richiedi reset password - invia token via email (simulato)"""
+    user = await db.utenti.find_one({"email": req.email}, {"_id": 0})
+    
+    # Always return success to prevent email enumeration
+    if not user:
+        return {"message": "Se l'email esiste, riceverai un link per reimpostare la password"}
+    
+    # Generate reset token (valid for 1 hour)
+    import secrets
+    reset_token = secrets.token_urlsafe(32)
+    expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    # Store token
+    await db.password_resets.delete_many({"email": req.email})  # Remove old tokens
+    await db.password_resets.insert_one({
+        "id": str(uuid.uuid4()),
+        "email": req.email,
+        "token": reset_token,
+        "expiry": expiry.isoformat(),
+        "used": False
+    })
+    
+    # In production, send email here
+    # For demo, we'll return the token in the notification
+    app_url = os.environ.get('APP_URL', '')
+    reset_link = f"{app_url}/reset-password?token={reset_token}"
+    
+    # Create notification for user (demo purposes)
+    await create_notification(
+        user["id"], "sistema",
+        "🔐 Richiesta reset password",
+        f"Clicca qui per reimpostare la password. Il link scade tra 1 ora.",
+        link=f"/reset-password?token={reset_token}"
+    )
+    
+    # Log for demo (in production this would be an email)
+    print(f"[PASSWORD RESET] Email: {req.email}, Link: {reset_link}")
+    
+    return {
+        "message": "Se l'email esiste, riceverai un link per reimpostare la password",
+        "demo_token": reset_token  # Remove in production!
+    }
+
+@api_router.post("/auth/reset-password")
+async def reset_password(req: PasswordResetConfirm):
+    """Conferma reset password con token"""
+    # Find valid token
+    reset_record = await db.password_resets.find_one({
+        "token": req.token,
+        "used": False
+    }, {"_id": 0})
+    
+    if not reset_record:
+        raise HTTPException(status_code=400, detail="Token non valido o scaduto")
+    
+    # Check expiry
+    expiry = datetime.fromisoformat(reset_record["expiry"])
+    if datetime.now(timezone.utc) > expiry:
+        raise HTTPException(status_code=400, detail="Token scaduto. Richiedi un nuovo link.")
+    
+    # Update password
+    new_hash = hash_password(req.new_password)
+    result = await db.utenti.update_one(
+        {"email": reset_record["email"]},
+        {"$set": {"password_hash": new_hash}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Errore durante il reset")
+    
+    # Mark token as used
+    await db.password_resets.update_one(
+        {"token": req.token},
+        {"$set": {"used": True}}
+    )
+    
+    # Notify user
+    user = await db.utenti.find_one({"email": reset_record["email"]}, {"_id": 0})
+    if user:
+        await create_notification(
+            user["id"], "sistema",
+            "✅ Password modificata",
+            "La tua password è stata reimpostata con successo."
+        )
+    
+    return {"message": "Password reimpostata con successo. Ora puoi accedere."}
+
+@api_router.get("/auth/verify-reset-token")
+async def verify_reset_token(token: str):
+    """Verifica se un token di reset è valido"""
+    reset_record = await db.password_resets.find_one({
+        "token": token,
+        "used": False
+    }, {"_id": 0})
+    
+    if not reset_record:
+        return {"valid": False, "message": "Token non valido"}
+    
+    expiry = datetime.fromisoformat(reset_record["expiry"])
+    if datetime.now(timezone.utc) > expiry:
+        return {"valid": False, "message": "Token scaduto"}
+    
+    return {"valid": True, "email": reset_record["email"][:3] + "***"}
+
 # ============== REFERRAL PROGRAM ==============
 
 @api_router.get("/referral/stats")

@@ -30,6 +30,9 @@ export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
   getMe: () => api.get('/auth/me'),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token, new_password) => api.post('/auth/reset-password', { token, new_password }),
+  verifyResetToken: (token) => api.get('/auth/verify-reset-token', { params: { token } }),
 };
 
 // Supermercati

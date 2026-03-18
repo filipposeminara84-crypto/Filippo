@@ -8,6 +8,7 @@ import StoricoPage from './pages/StoricoPage';
 import ImpostazioniPage from './pages/ImpostazioniPage';
 import OffertePage from './pages/OffertePage';
 import ReferralPage from './pages/ReferralPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import InstallPWAPrompt from './components/InstallPWAPrompt';
 import './App.css';
 
@@ -77,6 +78,7 @@ function AppRoutes() {
           <ImpostazioniPage />
         </PrivateRoute>
       } />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
