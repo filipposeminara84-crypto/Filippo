@@ -47,6 +47,7 @@ export const prodottiAPI = {
   autocomplete: (q) => api.get('/prodotti/autocomplete', { params: { q } }),
   getCategorie: () => api.get('/categorie'),
   getOfferte: () => api.get('/prodotti/offerte'),
+  catalogo: (categoria) => api.get('/catalogo', { params: categoria ? { categoria } : {} }),
 };
 
 // Liste

@@ -700,7 +700,7 @@ async def get_supermercato(supermercato_id: str):
 # ============== PRODOTTI ==============
 
 @api_router.get("/prodotti", response_model=List[Prodotto])
-async def get_prodotti(categoria: Optional[str] = None, search: Optional[str] = None, in_offerta: Optional[bool] = None):
+async def get_prodotti(categoria: Optional[str] = None, search: Optional[str] = None, in_offerta: Optional[bool] = None, supermercato_id: Optional[str] = None, limit: int = 500, skip: int = 0):
     query = {}
     if categoria:
         query["categoria"] = categoria
@@ -708,12 +708,13 @@ async def get_prodotti(categoria: Optional[str] = None, search: Optional[str] = 
         query["nome_prodotto"] = {"$regex": search, "$options": "i"}
     if in_offerta:
         query["in_offerta"] = True
-    # Optimized with projection and limit
+    if supermercato_id:
+        query["supermercato_id"] = supermercato_id
     prodotti = await db.prodotti.find(
         query, 
         {"_id": 0, "id": 1, "nome_prodotto": 1, "categoria": 1, "brand": 1, "formato": 1, 
          "supermercato_id": 1, "prezzo": 1, "in_offerta": 1, "sconto_percentuale": 1, "data_aggiornamento": 1}
-    ).limit(200).to_list(200)
+    ).skip(skip).limit(min(limit, 1000)).to_list(min(limit, 1000))
     return prodotti
 
 @api_router.get("/prodotti/autocomplete")
@@ -721,11 +722,12 @@ async def autocomplete_prodotti(q: str):
     if len(q) < 2:
         return []
     prodotti = await db.prodotti.find(
-        {"nome_prodotto": {"$regex": f"^{q}", "$options": "i"}},
+        {"nome_prodotto": {"$regex": q, "$options": "i"}},
         {"_id": 0, "nome_prodotto": 1}
-    ).to_list(10)
+    ).to_list(100)
     nomi_unici = list(set([p["nome_prodotto"] for p in prodotti]))
-    return nomi_unici[:10]
+    nomi_unici.sort()
+    return nomi_unici[:20]
 
 @api_router.get("/prodotti/offerte")
 async def get_offerte():
@@ -751,6 +753,41 @@ async def get_offerte():
 async def get_categorie():
     categorie = await db.prodotti.distinct("categoria")
     return categorie
+
+@api_router.get("/catalogo")
+async def get_catalogo(categoria: Optional[str] = None):
+    """Restituisce il catalogo prodotti unici (nome, brand, formato) raggruppati per categoria"""
+    query = {}
+    if categoria:
+        query["categoria"] = categoria
+    
+    pipeline = [
+        {"$match": query},
+        {"$group": {
+            "_id": {"nome": "$nome_prodotto", "categoria": "$categoria"},
+            "brand": {"$first": "$brand"},
+            "formato": {"$first": "$formato"},
+            "prezzo_min": {"$min": "$prezzo"},
+            "prezzo_max": {"$max": "$prezzo"},
+            "num_supermercati": {"$sum": 1},
+            "in_offerta": {"$max": {"$cond": ["$in_offerta", 1, 0]}}
+        }},
+        {"$project": {
+            "_id": 0,
+            "nome_prodotto": "$_id.nome",
+            "categoria": "$_id.categoria",
+            "brand": 1,
+            "formato": 1,
+            "prezzo_min": 1,
+            "prezzo_max": 1,
+            "num_supermercati": 1,
+            "in_offerta": {"$gt": ["$in_offerta", 0]}
+        }},
+        {"$sort": {"categoria": 1, "nome_prodotto": 1}}
+    ]
+    
+    risultati = await db.prodotti.aggregate(pipeline).to_list(500)
+    return risultati
 
 # ============== LISTE SPESA ==============
 

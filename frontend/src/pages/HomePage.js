@@ -10,6 +10,7 @@ import { prodottiAPI, listeAPI, ottimizzaAPI, preferenzeAPI } from '../lib/api';
 import { formatPrice } from '../lib/utils';
 import Layout from '../components/Layout';
 import CondividiListaModal from '../components/CondividiListaModal';
+import LocationPicker from '../components/LocationPicker';
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -28,6 +29,8 @@ export default function HomePage() {
   const [preferenze, setPreferenze] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedListaForShare, setSelectedListaForShare] = useState(null);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [locationName, setLocationName] = useState('Pioltello Centro');
   
   const inputRef = useRef(null);
 
@@ -178,7 +181,7 @@ export default function HomePage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-stone-900">
-              Ciao, {user?.nome}! 👋
+              Ciao, {user?.nome}!
             </h1>
             <p className="text-stone-500 mt-1">Cosa devi comprare oggi?</p>
           </div>
@@ -192,6 +195,20 @@ export default function HomePage() {
             </div>
           )}
         </div>
+
+        {/* Location Bar */}
+        <button
+          onClick={() => setShowLocationPicker(true)}
+          className="w-full flex items-center gap-3 bg-white rounded-2xl shadow-sm border border-stone-100 px-4 py-3 hover:border-emerald-300 transition-colors"
+          data-testid="location-bar"
+        >
+          <MapPin className="w-5 h-5 text-emerald-500" />
+          <div className="flex-1 text-left">
+            <p className="text-sm font-medium text-stone-700">{locationName}</p>
+            <p className="text-xs text-stone-400">{userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}</p>
+          </div>
+          <span className="text-xs text-emerald-500 font-medium">Cambia</span>
+        </button>
 
         {/* Input Lista */}
         <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-5">
@@ -442,6 +459,21 @@ export default function HomePage() {
           loadListeSalvate();
         }}
       />
+
+      {/* Location Picker Modal */}
+      <AnimatePresence>
+        {showLocationPicker && (
+          <LocationPicker
+            currentLocation={userLocation}
+            onLocationChange={(loc) => {
+              setUserLocation({ lat: loc.lat, lng: loc.lng });
+              setLocationName(loc.nome || `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`);
+              setShowLocationPicker(false);
+            }}
+            onClose={() => setShowLocationPicker(false)}
+          />
+        )}
+      </AnimatePresence>
     </Layout>
   );
 }
