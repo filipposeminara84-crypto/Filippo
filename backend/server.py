@@ -15,6 +15,7 @@ import bcrypt
 import math
 import random
 import asyncio
+from scraper import scrape_doveconviene, scrape_all_categories, update_prices_from_scraping, SEARCH_TERMS
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1278,7 +1279,12 @@ async def seed_database():
         {"id": "eurospin-pioltello", "nome": "Eurospin Pioltello", "catena": "Eurospin", "indirizzo": "Via Bergamo 56, Pioltello MI", "lat": 45.4889, "lng": 9.3367, "orari": {"lun-sab": "08:30-20:00", "dom": "09:00-13:00"}, "telefono": "02 9269XXX", "servizi": ["parcheggio"]},
         {"id": "carrefour-segrate", "nome": "Carrefour Market Segrate", "catena": "Carrefour", "indirizzo": "Via Kennedy 15, Segrate MI", "lat": 45.4845, "lng": 9.2956, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 2135XXX", "servizi": ["parcheggio", "banco_gastronomia", "sushi"]},
         {"id": "penny-pioltello", "nome": "Penny Market Pioltello", "catena": "Penny", "indirizzo": "Via Dante 22, Pioltello MI", "lat": 45.4901, "lng": 9.3298, "orari": {"lun-sab": "08:00-20:30", "dom": "09:00-13:00"}, "telefono": "02 9270XXX", "servizi": ["parcheggio"]},
-        {"id": "md-segrate", "nome": "MD Discount Segrate", "catena": "MD", "indirizzo": "Via Verdi 78, Segrate MI", "lat": 45.4867, "lng": 9.3012, "orari": {"lun-sab": "08:00-20:00", "dom": "09:00-13:30"}, "telefono": "02 2140XXX", "servizi": ["parcheggio"]}
+        {"id": "md-segrate", "nome": "MD Discount Segrate", "catena": "MD", "indirizzo": "Via Verdi 78, Segrate MI", "lat": 45.4867, "lng": 9.3012, "orari": {"lun-sab": "08:00-20:00", "dom": "09:00-13:30"}, "telefono": "02 2140XXX", "servizi": ["parcheggio"]},
+        {"id": "conad-pioltello", "nome": "Conad City Pioltello", "catena": "Conad", "indirizzo": "Via Mazzini 33, Pioltello MI", "lat": 45.4958, "lng": 9.3278, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 9271XXX", "servizi": ["parcheggio", "banco_gastronomia"]},
+        {"id": "aldi-segrate", "nome": "ALDI Segrate", "catena": "Aldi", "indirizzo": "Via Rivoltana 25, Segrate MI", "lat": 45.4823, "lng": 9.2898, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "800 090XXX", "servizi": ["parcheggio", "panetteria"]},
+        {"id": "despar-pioltello", "nome": "Despar Pioltello", "catena": "Despar", "indirizzo": "Via Garibaldi 15, Pioltello MI", "lat": 45.4941, "lng": 9.3334, "orari": {"lun-sab": "08:00-20:30", "dom": "09:00-13:00"}, "telefono": "02 9272XXX", "servizi": ["parcheggio"]},
+        {"id": "unes-cernusco", "nome": "Unes Cernusco Sul Naviglio", "catena": "Unes", "indirizzo": "Via Torino 50, Cernusco sul Naviglio MI", "lat": 45.5012, "lng": 9.3367, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 9274XXX", "servizi": ["parcheggio", "banco_gastronomia", "sushi"]},
+        {"id": "iperal-pioltello", "nome": "Iperal Pioltello", "catena": "Iperal", "indirizzo": "Via Monza 88, Pioltello MI", "lat": 45.4990, "lng": 9.3198, "orari": {"lun-sab": "08:00-21:30", "dom": "09:00-20:00"}, "telefono": "02 9275XXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria", "farmacia"]}
     ]
     
     # EXPANDED product categories
@@ -1419,7 +1425,8 @@ async def seed_database():
     variazioni = {
         "coop-pioltello": 1.0, "esselunga-pioltello": 1.05, "lidl-pioltello": 0.85,
         "eurospin-pioltello": 0.80, "carrefour-segrate": 0.95, "penny-pioltello": 0.82,
-        "md-segrate": 0.78
+        "md-segrate": 0.78, "conad-pioltello": 0.98, "aldi-segrate": 0.83,
+        "despar-pioltello": 1.02, "unes-cernusco": 0.97, "iperal-pioltello": 1.03
     }
     
     prodotti_data = []
@@ -1472,6 +1479,95 @@ async def seed_database():
         "supermercati": len(supermercati_data),
         "prodotti": len(prodotti_data),
         "categorie": len(categorie_prodotti)
+    }
+
+# ============== SCRAPER ==============
+
+# Store scraping status in memory
+scraping_status = {
+    "in_corso": False,
+    "ultimo_scraping": None,
+    "risultato": None,
+    "log": []
+}
+
+@api_router.post("/scraper/run")
+async def run_scraper(background_tasks: BackgroundTasks, search_term: Optional[str] = None, user=Depends(get_current_user)):
+    """Avvia lo scraping dei prezzi da DoveConviene"""
+    if scraping_status["in_corso"]:
+        raise HTTPException(status_code=409, detail="Scraping già in corso")
+
+    async def do_scraping():
+        scraping_status["in_corso"] = True
+        scraping_status["log"] = []
+        try:
+            if search_term:
+                scraping_status["log"].append(f"Scraping prodotto: {search_term}")
+                results = await scrape_doveconviene(search_term)
+                scraping_status["log"].append(f"Trovati {len(results)} risultati per '{search_term}'")
+            else:
+                scraping_status["log"].append("Scraping completo di tutte le categorie...")
+                data = await scrape_all_categories()
+                results = []
+                for cat, items in data["categorie"].items():
+                    results.extend(items)
+                    scraping_status["log"].append(f"  {cat}: {len(items)} prodotti")
+
+            # Update prices in DB
+            supermercati = await db.supermercati.find({}, {"_id": 0}).to_list(100)
+            update_result = await update_prices_from_scraping(db, results, supermercati)
+
+            # Store scraping log
+            log_entry = {
+                "id": str(uuid.uuid4()),
+                "data": datetime.now(timezone.utc).isoformat(),
+                "prodotti_trovati": len(results),
+                "prodotti_aggiornati": update_result["prodotti_aggiornati"],
+                "nuove_offerte": update_result["nuove_offerte"],
+                "errori": update_result["errori"],
+                "tipo": "singolo" if search_term else "completo",
+                "search_term": search_term,
+            }
+            await db.scraping_log.insert_one({**log_entry})
+
+            scraping_status["risultato"] = log_entry
+            scraping_status["log"].append(f"Completato: {update_result['prodotti_aggiornati']} prezzi aggiornati, {update_result['nuove_offerte']} nuove offerte")
+        except Exception as e:
+            scraping_status["log"].append(f"Errore: {str(e)}")
+            scraping_status["risultato"] = {"errore": str(e)}
+        finally:
+            scraping_status["in_corso"] = False
+            scraping_status["ultimo_scraping"] = datetime.now(timezone.utc).isoformat()
+
+    background_tasks.add_task(do_scraping)
+    return {"message": "Scraping avviato in background", "tipo": "singolo" if search_term else "completo"}
+
+@api_router.get("/scraper/status")
+async def get_scraper_status(user=Depends(get_current_user)):
+    """Stato corrente dello scraper"""
+    return scraping_status
+
+@api_router.get("/scraper/log")
+async def get_scraper_log(limit: int = 20, user=Depends(get_current_user)):
+    """Storico delle operazioni di scraping"""
+    logs = await db.scraping_log.find(
+        {}, {"_id": 0}
+    ).sort("data", -1).to_list(limit)
+    return logs
+
+@api_router.get("/scraper/categories")
+async def get_scraper_categories(user=Depends(get_current_user)):
+    """Lista categorie e termini di ricerca disponibili per lo scraping"""
+    return {cat: terms for cat, terms in SEARCH_TERMS.items()}
+
+@api_router.post("/scraper/search-preview")
+async def scraper_search_preview(search_term: str, user=Depends(get_current_user)):
+    """Cerca un prodotto su DoveConviene senza aggiornare il DB (anteprima)"""
+    results = await scrape_doveconviene(search_term)
+    return {
+        "search_term": search_term,
+        "risultati": len(results),
+        "prodotti": results[:30]
     }
 
 # ============== HEALTH ==============

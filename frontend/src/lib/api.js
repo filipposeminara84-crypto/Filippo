@@ -110,6 +110,15 @@ export const prezziAPI = {
   ultimoAggiornamento: () => api.get('/prezzi/ultimo-aggiornamento'),
 };
 
+// Scraper / Prezzi
+export const scraperAPI = {
+  run: (search_term) => api.post('/scraper/run', null, { params: search_term ? { search_term } : {} }),
+  status: () => api.get('/scraper/status'),
+  log: (limit = 20) => api.get('/scraper/log', { params: { limit } }),
+  categories: () => api.get('/scraper/categories'),
+  searchPreview: (search_term) => api.post('/scraper/search-preview', null, { params: { search_term } }),
+};
+
 // Seed
 export const seedAPI = {
   seed: () => api.post('/seed'),

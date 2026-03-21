@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Clock, Settings, LogOut, ShoppingCart, Tag, Gift } from 'lucide-react';
+import { Home, Clock, Settings, LogOut, ShoppingCart, Tag, Gift, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
 import NotificheDropdown from './NotificheDropdown';
@@ -17,6 +17,7 @@ export default function Layout({ children }) {
   const navItems = [
     { to: '/', icon: Home, label: 'Home' },
     { to: '/offerte', icon: Tag, label: 'Offerte' },
+    { to: '/prezzi', icon: RefreshCw, label: 'Prezzi' },
     { to: '/referral', icon: Gift, label: 'Referral' },
     { to: '/storico', icon: Clock, label: 'Storico' },
     { to: '/impostazioni', icon: Settings, label: 'Impostazioni' },
