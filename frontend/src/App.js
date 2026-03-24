@@ -8,6 +8,9 @@ import StoricoPage from './pages/StoricoPage';
 import ImpostazioniPage from './pages/ImpostazioniPage';
 import OffertePage from './pages/OffertePage';
 import ReferralPage from './pages/ReferralPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import PrezziPage from './pages/PrezziPage';
+import InstallPWAPrompt from './components/InstallPWAPrompt';
 import './App.css';
 
 function PrivateRoute({ children }) {
@@ -76,6 +79,12 @@ function AppRoutes() {
           <ImpostazioniPage />
         </PrivateRoute>
       } />
+      <Route path="/prezzi" element={
+        <PrivateRoute>
+          <PrezziPage />
+        </PrivateRoute>
+      } />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
@@ -86,6 +95,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
+        <InstallPWAPrompt />
       </AuthProvider>
     </BrowserRouter>
   );

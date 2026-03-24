@@ -1,67 +1,72 @@
-# Shopply v2.1 - Product Requirements Document
+# Shopply - PRD (Product Requirements Document)
 
-## Status: ✅ DEPLOYMENT READY
+## Problema Originale
+App web per ottimizzare la spesa al supermercato, trovando i migliori prezzi tra più supermercati nella zona dell'utente (Area Pioltello).
 
-## Problema
-Famiglie italiane spendono tempo confrontando volantini e pianificando la spesa settimanale.
+## Stack Tecnologico
+- **Frontend**: React.js, TailwindCSS, Framer Motion, Leaflet, lucide-react
+- **Backend**: FastAPI, Python, MongoDB (motor), JWT auth
+- **Architettura**: SPA con REST API, PWA con offline capabilities
 
-## Soluzione
-App web per ottimizzazione spesa multi-supermercato con aggiornamento prezzi automatico, condivisione familiare e programma referral.
+## Funzionalità Implementate
 
-## Tech Stack
-- Frontend: React 19, TailwindCSS, Framer Motion, React-Leaflet
-- Backend: FastAPI (Python)
-- Database: MongoDB
-- Mappe: Leaflet + OpenStreetMap
-- Auth: JWT Email/Password
+### MVP (v1.0)
+- Autenticazione utente (email/password)
+- Creazione e gestione liste della spesa
+- Algoritmo di ottimizzazione prezzi
+- Mappa con posizioni supermercati e percorsi
+- Dati seed per supermercati e prodotti
 
-## Features Implementate
-### v2.1 - Programma Referral
-- [x] Codice referral univoco per utente
-- [x] Bonus: 50 punti invitante, 25 punti invitato
-- [x] 10 punti = €1 sconto riscattabile
-- [x] Dashboard referral completa
-- [x] Classifica Top Referrer
-- [x] Pre-compilazione codice da URL
+### V2.0
+- Database prodotti/supermercati espanso
+- Aggiornamento automatico prezzi + offerte speciali
+- Notifiche in-app per offerte
+- Condivisione liste con familiari
 
-### v2.0 - Espansione
-- [x] 1477 prodotti, 7 supermercati, 12 categorie
-- [x] Aggiornamento prezzi automatico (bulk write ottimizzato)
-- [x] Sistema notifiche in-app
-- [x] Condivisione liste familiari
-- [x] Pagina offerte del giorno
+### V2.1
+- Programma referral (punti/sconti per inviti)
+- PWA installabile con supporto offline
 
-### v1.0 - MVP
-- [x] Auth JWT email/password
-- [x] Input lista spesa con autocomplete
-- [x] Algoritmo ottimizzazione greedy
-- [x] Mappa interattiva percorso
-- [x] Storico ricerche
-- [x] Impostazioni preferenze
+### V2.2 (18 Marzo 2026)
+- Flusso "Password Dimenticata" completo
+- Correzione Geolocalizzazione (enableHighAccuracy)
+- Fix Build Frontend (JSX duplicato)
 
-## Deployment Checks ✅
-- [x] No hardcoded URLs/secrets
-- [x] Environment variables configured
-- [x] Query optimizations applied
-- [x] Database indexes configured
-- [x] CORS properly set
-- [x] Supervisor config valid
+### V2.3 (21 Marzo 2026) - Database Prodotti/Offerte
+- **12 Supermercati**: Coop, Esselunga, Lidl, Eurospin, Carrefour, Penny, MD, Conad, Aldi, Despar, Unes, Iperal (tutti nell'area Pioltello/Segrate/Cernusco)
+- **2532 Prodotti** suddivisi in 12 categorie (Latticini, Pane e Cereali, Frutta e Verdura, Carne e Pesce, Bevande, Snack e Dolci, Condimenti e Salse, Surgelati, Igiene e Casa, Igiene Personale, Baby e Infanzia, Pet Food)
+- **Scraping Prezzi Reali da DoveConviene.it**: Sistema di web scraping con BeautifulSoup che estrae prezzi, offerte e sconti dai volantini
+- **Pagina Gestione Prezzi** (/prezzi): Interfaccia per cercare prodotti, avviare scraping per categoria o termine, visualizzare anteprime prezzi e storico aggiornamenti
+- **Aggiornamento prezzi in background**: Lo scraping viene eseguito in background con polling dello stato
 
-## Backlog P1 (Future)
-- [ ] Integrazione assistenti vocali (Google/Alexa/Siri) - richiede API keys
-- [ ] Push notifications PWA
-- [ ] Input vocale lista
-- [ ] Scan barcode
-- [ ] Web scraping prezzi reali
-- [ ] Livelli VIP referral
+## Schema DB Principale
+- **utenti**: {id, email, nome, hashed_password, referral_code, punti_referral}
+- **prodotti**: {id, nome_prodotto, supermercato_id, prezzo, categoria, in_offerta, fonte_prezzo, data_aggiornamento}
+- **supermercati**: {id, nome, catena, indirizzo, lat, lng}
+- **liste_spesa**: {id, utente_id, nome, prodotti}
+- **notifiche**: {id, utente_id, tipo, messaggio}
+- **famiglie**: {id, nome, creatore_id, membri}
+- **password_resets**: {email, token, expiry, used}
+- **scraping_log**: {id, data, prodotti_trovati, prodotti_aggiornati, nuove_offerte, errori, tipo}
 
-## Test Results
-- Backend: 100%
-- Frontend: 95%
-- Integration: 100%
-- Deployment: READY
+## API Principali
+- Auth: /api/auth/login, /api/auth/register, /api/auth/forgot-password, /api/auth/reset-password
+- Prodotti: /api/prodotti, /api/prodotti/offerte, /api/prodotti/autocomplete
+- Supermercati: /api/supermercati
+- Scraper: /api/scraper/run, /api/scraper/status, /api/scraper/log, /api/scraper/categories, /api/scraper/search-preview
+- Liste: /api/liste, /api/liste/{id}
+- Ottimizzazione: /api/ottimizza
 
-## Dates
-- 21/02/2026: MVP
-- 21/02/2026: v2.0 
-- 21/02/2026: v2.1 + Deployment Ready
+## Backlog Prioritizzato
+
+### P2 - Prossime
+- Missioni Giornaliere/Settimanali (engagement gamification)
+
+### P3 - Future
+- Integrazione Assistenti Vocali (Google Assistant, Alexa, Siri) - rinviata in attesa delle API
+
+## Note Tecniche
+- Email reset password è SIMULATA (stampa in console + notifica in-app)
+- Backend monolitico in server.py (considerare suddivisione)
+- Lo scraping da DoveConviene è REALE, non simulato
+- Il database prodotti ha variazioni di prezzo realistiche per catena

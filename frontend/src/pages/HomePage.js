@@ -64,9 +64,13 @@ export default function HomePage() {
             lng: pos.coords.longitude
           });
         },
-        () => {
-          // Use default Pioltello location
-          console.log('Using default location');
+        (err) => {
+          console.log('Geolocation error, using default location:', err.message);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
         }
       );
     }

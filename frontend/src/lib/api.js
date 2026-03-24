@@ -30,6 +30,9 @@ export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
   getMe: () => api.get('/auth/me'),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token, new_password) => api.post('/auth/reset-password', { token, new_password }),
+  verifyResetToken: (token) => api.get('/auth/verify-reset-token', { params: { token } }),
 };
 
 // Supermercati
@@ -105,6 +108,15 @@ export const referralAPI = {
 export const prezziAPI = {
   aggiorna: () => api.post('/prezzi/aggiorna'),
   ultimoAggiornamento: () => api.get('/prezzi/ultimo-aggiornamento'),
+};
+
+// Scraper / Prezzi
+export const scraperAPI = {
+  run: (search_term) => api.post('/scraper/run', null, { params: search_term ? { search_term } : {} }),
+  status: () => api.get('/scraper/status'),
+  log: (limit = 20) => api.get('/scraper/log', { params: { limit } }),
+  categories: () => api.get('/scraper/categories'),
+  searchPreview: (search_term) => api.post('/scraper/search-preview', null, { params: { search_term } }),
 };
 
 // Seed

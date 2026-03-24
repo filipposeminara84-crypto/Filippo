@@ -15,6 +15,7 @@ import bcrypt
 import math
 import random
 import asyncio
+from scraper import scrape_doveconviene, scrape_all_categories, update_prices_from_scraping, SEARCH_TERMS
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -391,6 +392,121 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         referral_code=current_user.get("referral_code"),
         punti_referral=current_user.get("punti_referral", 0)
     )
+
+# ============== PASSWORD RECOVERY ==============
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(req: PasswordResetRequest):
+    """Richiedi reset password - invia token via email (simulato)"""
+    user = await db.utenti.find_one({"email": req.email}, {"_id": 0})
+    
+    # Always return success to prevent email enumeration
+    if not user:
+        return {"message": "Se l'email esiste, riceverai un link per reimpostare la password"}
+    
+    # Generate reset token (valid for 1 hour)
+    import secrets
+    reset_token = secrets.token_urlsafe(32)
+    expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    # Store token
+    await db.password_resets.delete_many({"email": req.email})  # Remove old tokens
+    await db.password_resets.insert_one({
+        "id": str(uuid.uuid4()),
+        "email": req.email,
+        "token": reset_token,
+        "expiry": expiry.isoformat(),
+        "used": False
+    })
+    
+    # In production, send email here
+    # For demo, we'll return the token in the notification
+    app_url = os.environ.get('APP_URL', '')
+    reset_link = f"{app_url}/reset-password?token={reset_token}"
+    
+    # Create notification for user (demo purposes)
+    await create_notification(
+        user["id"], "sistema",
+        "🔐 Richiesta reset password",
+        f"Clicca qui per reimpostare la password. Il link scade tra 1 ora.",
+        link=f"/reset-password?token={reset_token}"
+    )
+    
+    # Log for demo (in production this would be an email)
+    print(f"[PASSWORD RESET] Email: {req.email}, Link: {reset_link}")
+    
+    return {
+        "message": "Se l'email esiste, riceverai un link per reimpostare la password",
+        "demo_token": reset_token  # Remove in production!
+    }
+
+@api_router.post("/auth/reset-password")
+async def reset_password(req: PasswordResetConfirm):
+    """Conferma reset password con token"""
+    # Find valid token
+    reset_record = await db.password_resets.find_one({
+        "token": req.token,
+        "used": False
+    }, {"_id": 0})
+    
+    if not reset_record:
+        raise HTTPException(status_code=400, detail="Token non valido o scaduto")
+    
+    # Check expiry
+    expiry = datetime.fromisoformat(reset_record["expiry"])
+    if datetime.now(timezone.utc) > expiry:
+        raise HTTPException(status_code=400, detail="Token scaduto. Richiedi un nuovo link.")
+    
+    # Update password
+    new_hash = hash_password(req.new_password)
+    result = await db.utenti.update_one(
+        {"email": reset_record["email"]},
+        {"$set": {"password_hash": new_hash}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Errore durante il reset")
+    
+    # Mark token as used
+    await db.password_resets.update_one(
+        {"token": req.token},
+        {"$set": {"used": True}}
+    )
+    
+    # Notify user
+    user = await db.utenti.find_one({"email": reset_record["email"]}, {"_id": 0})
+    if user:
+        await create_notification(
+            user["id"], "sistema",
+            "✅ Password modificata",
+            "La tua password è stata reimpostata con successo."
+        )
+    
+    return {"message": "Password reimpostata con successo. Ora puoi accedere."}
+
+@api_router.get("/auth/verify-reset-token")
+async def verify_reset_token(token: str):
+    """Verifica se un token di reset è valido"""
+    reset_record = await db.password_resets.find_one({
+        "token": token,
+        "used": False
+    }, {"_id": 0})
+    
+    if not reset_record:
+        return {"valid": False, "message": "Token non valido"}
+    
+    expiry = datetime.fromisoformat(reset_record["expiry"])
+    if datetime.now(timezone.utc) > expiry:
+        return {"valid": False, "message": "Token scaduto"}
+    
+    return {"valid": True, "email": reset_record["email"][:3] + "***"}
 
 # ============== REFERRAL PROGRAM ==============
 
@@ -1163,7 +1279,12 @@ async def seed_database():
         {"id": "eurospin-pioltello", "nome": "Eurospin Pioltello", "catena": "Eurospin", "indirizzo": "Via Bergamo 56, Pioltello MI", "lat": 45.4889, "lng": 9.3367, "orari": {"lun-sab": "08:30-20:00", "dom": "09:00-13:00"}, "telefono": "02 9269XXX", "servizi": ["parcheggio"]},
         {"id": "carrefour-segrate", "nome": "Carrefour Market Segrate", "catena": "Carrefour", "indirizzo": "Via Kennedy 15, Segrate MI", "lat": 45.4845, "lng": 9.2956, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 2135XXX", "servizi": ["parcheggio", "banco_gastronomia", "sushi"]},
         {"id": "penny-pioltello", "nome": "Penny Market Pioltello", "catena": "Penny", "indirizzo": "Via Dante 22, Pioltello MI", "lat": 45.4901, "lng": 9.3298, "orari": {"lun-sab": "08:00-20:30", "dom": "09:00-13:00"}, "telefono": "02 9270XXX", "servizi": ["parcheggio"]},
-        {"id": "md-segrate", "nome": "MD Discount Segrate", "catena": "MD", "indirizzo": "Via Verdi 78, Segrate MI", "lat": 45.4867, "lng": 9.3012, "orari": {"lun-sab": "08:00-20:00", "dom": "09:00-13:30"}, "telefono": "02 2140XXX", "servizi": ["parcheggio"]}
+        {"id": "md-segrate", "nome": "MD Discount Segrate", "catena": "MD", "indirizzo": "Via Verdi 78, Segrate MI", "lat": 45.4867, "lng": 9.3012, "orari": {"lun-sab": "08:00-20:00", "dom": "09:00-13:30"}, "telefono": "02 2140XXX", "servizi": ["parcheggio"]},
+        {"id": "conad-pioltello", "nome": "Conad City Pioltello", "catena": "Conad", "indirizzo": "Via Mazzini 33, Pioltello MI", "lat": 45.4958, "lng": 9.3278, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 9271XXX", "servizi": ["parcheggio", "banco_gastronomia"]},
+        {"id": "aldi-segrate", "nome": "ALDI Segrate", "catena": "Aldi", "indirizzo": "Via Rivoltana 25, Segrate MI", "lat": 45.4823, "lng": 9.2898, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "800 090XXX", "servizi": ["parcheggio", "panetteria"]},
+        {"id": "despar-pioltello", "nome": "Despar Pioltello", "catena": "Despar", "indirizzo": "Via Garibaldi 15, Pioltello MI", "lat": 45.4941, "lng": 9.3334, "orari": {"lun-sab": "08:00-20:30", "dom": "09:00-13:00"}, "telefono": "02 9272XXX", "servizi": ["parcheggio"]},
+        {"id": "unes-cernusco", "nome": "Unes Cernusco Sul Naviglio", "catena": "Unes", "indirizzo": "Via Torino 50, Cernusco sul Naviglio MI", "lat": 45.5012, "lng": 9.3367, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 9274XXX", "servizi": ["parcheggio", "banco_gastronomia", "sushi"]},
+        {"id": "iperal-pioltello", "nome": "Iperal Pioltello", "catena": "Iperal", "indirizzo": "Via Monza 88, Pioltello MI", "lat": 45.4990, "lng": 9.3198, "orari": {"lun-sab": "08:00-21:30", "dom": "09:00-20:00"}, "telefono": "02 9275XXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria", "farmacia"]}
     ]
     
     # EXPANDED product categories
@@ -1304,7 +1425,8 @@ async def seed_database():
     variazioni = {
         "coop-pioltello": 1.0, "esselunga-pioltello": 1.05, "lidl-pioltello": 0.85,
         "eurospin-pioltello": 0.80, "carrefour-segrate": 0.95, "penny-pioltello": 0.82,
-        "md-segrate": 0.78
+        "md-segrate": 0.78, "conad-pioltello": 0.98, "aldi-segrate": 0.83,
+        "despar-pioltello": 1.02, "unes-cernusco": 0.97, "iperal-pioltello": 1.03
     }
     
     prodotti_data = []
@@ -1357,6 +1479,95 @@ async def seed_database():
         "supermercati": len(supermercati_data),
         "prodotti": len(prodotti_data),
         "categorie": len(categorie_prodotti)
+    }
+
+# ============== SCRAPER ==============
+
+# Store scraping status in memory
+scraping_status = {
+    "in_corso": False,
+    "ultimo_scraping": None,
+    "risultato": None,
+    "log": []
+}
+
+@api_router.post("/scraper/run")
+async def run_scraper(background_tasks: BackgroundTasks, search_term: Optional[str] = None, user=Depends(get_current_user)):
+    """Avvia lo scraping dei prezzi da DoveConviene"""
+    if scraping_status["in_corso"]:
+        raise HTTPException(status_code=409, detail="Scraping già in corso")
+
+    async def do_scraping():
+        scraping_status["in_corso"] = True
+        scraping_status["log"] = []
+        try:
+            if search_term:
+                scraping_status["log"].append(f"Scraping prodotto: {search_term}")
+                results = await scrape_doveconviene(search_term)
+                scraping_status["log"].append(f"Trovati {len(results)} risultati per '{search_term}'")
+            else:
+                scraping_status["log"].append("Scraping completo di tutte le categorie...")
+                data = await scrape_all_categories()
+                results = []
+                for cat, items in data["categorie"].items():
+                    results.extend(items)
+                    scraping_status["log"].append(f"  {cat}: {len(items)} prodotti")
+
+            # Update prices in DB
+            supermercati = await db.supermercati.find({}, {"_id": 0}).to_list(100)
+            update_result = await update_prices_from_scraping(db, results, supermercati)
+
+            # Store scraping log
+            log_entry = {
+                "id": str(uuid.uuid4()),
+                "data": datetime.now(timezone.utc).isoformat(),
+                "prodotti_trovati": len(results),
+                "prodotti_aggiornati": update_result["prodotti_aggiornati"],
+                "nuove_offerte": update_result["nuove_offerte"],
+                "errori": update_result["errori"],
+                "tipo": "singolo" if search_term else "completo",
+                "search_term": search_term,
+            }
+            await db.scraping_log.insert_one({**log_entry})
+
+            scraping_status["risultato"] = log_entry
+            scraping_status["log"].append(f"Completato: {update_result['prodotti_aggiornati']} prezzi aggiornati, {update_result['nuove_offerte']} nuove offerte")
+        except Exception as e:
+            scraping_status["log"].append(f"Errore: {str(e)}")
+            scraping_status["risultato"] = {"errore": str(e)}
+        finally:
+            scraping_status["in_corso"] = False
+            scraping_status["ultimo_scraping"] = datetime.now(timezone.utc).isoformat()
+
+    background_tasks.add_task(do_scraping)
+    return {"message": "Scraping avviato in background", "tipo": "singolo" if search_term else "completo"}
+
+@api_router.get("/scraper/status")
+async def get_scraper_status(user=Depends(get_current_user)):
+    """Stato corrente dello scraper"""
+    return scraping_status
+
+@api_router.get("/scraper/log")
+async def get_scraper_log(limit: int = 20, user=Depends(get_current_user)):
+    """Storico delle operazioni di scraping"""
+    logs = await db.scraping_log.find(
+        {}, {"_id": 0}
+    ).sort("data", -1).to_list(limit)
+    return logs
+
+@api_router.get("/scraper/categories")
+async def get_scraper_categories(user=Depends(get_current_user)):
+    """Lista categorie e termini di ricerca disponibili per lo scraping"""
+    return {cat: terms for cat, terms in SEARCH_TERMS.items()}
+
+@api_router.post("/scraper/search-preview")
+async def scraper_search_preview(search_term: str, user=Depends(get_current_user)):
+    """Cerca un prodotto su DoveConviene senza aggiornare il DB (anteprima)"""
+    results = await scrape_doveconviene(search_term)
+    return {
+        "search_term": search_term,
+        "risultati": len(results),
+        "prodotti": results[:30]
     }
 
 # ============== HEALTH ==============

@@ -7,7 +7,7 @@ from datetime import datetime
 import uuid
 
 class ShopplyReferralTester:
-    def __init__(self, base_url="https://command-center-124.preview.emergentagent.com"):
+    def __init__(self, base_url="https://shopply-grocery.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
         self.user_id = None
