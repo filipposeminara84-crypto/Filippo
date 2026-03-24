@@ -39,6 +39,8 @@ export const authAPI = {
 export const supermercatiAPI = {
   getAll: () => api.get('/supermercati'),
   getById: (id) => api.get(`/supermercati/${id}`),
+  nearby: (lat, lng, raggio_km = 10) => api.get('/supermercati/nearby', { params: { lat, lng, raggio_km } }),
+  copertura: () => api.get('/copertura'),
 };
 
 // Prodotti

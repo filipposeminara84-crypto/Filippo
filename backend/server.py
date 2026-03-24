@@ -84,6 +84,8 @@ class Supermercato(BaseModel):
     orari: Dict[str, str]
     telefono: str
     servizi: List[str]
+    regione: Optional[str] = None
+    citta: Optional[str] = None
 
 class Prodotto(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -687,8 +689,55 @@ async def update_preferenze(prefs: Preferenze, current_user: dict = Depends(get_
 
 @api_router.get("/supermercati", response_model=List[Supermercato])
 async def get_supermercati():
-    supermercati = await db.supermercati.find({}, {"_id": 0}).to_list(100)
+    supermercati = await db.supermercati.find({}, {"_id": 0}).to_list(200)
     return supermercati
+
+@api_router.get("/supermercati/nearby")
+async def get_supermercati_nearby(lat: float, lng: float, raggio_km: float = 10):
+    """Trova supermercati entro un raggio dalla posizione data"""
+    supermercati = await db.supermercati.find({}, {"_id": 0}).to_list(200)
+    risultati = []
+    for sup in supermercati:
+        dist = math.sqrt(
+            ((sup["lat"] - lat) * 111.32) ** 2 +
+            ((sup["lng"] - lng) * 111.32 * math.cos(math.radians(lat))) ** 2
+        )
+        if dist <= raggio_km:
+            sup["distanza_km"] = round(dist, 1)
+            risultati.append(sup)
+    risultati.sort(key=lambda x: x["distanza_km"])
+    return risultati
+
+@api_router.get("/copertura")
+async def get_copertura():
+    """Restituisce le zone coperte e info sulla copertura"""
+    supermercati = await db.supermercati.find({}, {"_id": 0, "regione": 1, "citta": 1, "catena": 1}).to_list(200)
+    regioni = {}
+    for s in supermercati:
+        reg = s.get("regione", "Altro")
+        citta = s.get("citta", "N/D")
+        if reg not in regioni:
+            regioni[reg] = {}
+        if citta not in regioni[reg]:
+            regioni[reg][citta] = set()
+        regioni[reg][citta].add(s["catena"])
+    
+    copertura = []
+    for reg, citta_dict in regioni.items():
+        for citta, catene in citta_dict.items():
+            copertura.append({
+                "regione": reg,
+                "citta": citta,
+                "catene": sorted(list(catene)),
+                "num_negozi": sum(1 for s in supermercati if s.get("citta") == citta)
+            })
+    
+    return {
+        "zone_coperte": copertura,
+        "totale_negozi": len(supermercati),
+        "regioni": sorted(list(regioni.keys())),
+        "messaggio": "Copertura Lombardia e Sicilia. Espansione nazionale prevista Q2 2026."
+    }
 
 @api_router.get("/supermercati/{supermercato_id}", response_model=Supermercato)
 async def get_supermercato(supermercato_id: str):
@@ -1310,18 +1359,43 @@ async def seed_database():
     """Popola il database con dati di esempio ESPANSI (~600 prodotti)"""
     
     supermercati_data = [
-        {"id": "coop-pioltello", "nome": "Coop Pioltello", "catena": "Coop", "indirizzo": "Via Roma 45, Pioltello MI", "lat": 45.4975, "lng": 9.3306, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 9267XXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria"]},
-        {"id": "esselunga-pioltello", "nome": "Esselunga Pioltello", "catena": "Esselunga", "indirizzo": "Via Milano 120, Pioltello MI", "lat": 45.5012, "lng": 9.3245, "orari": {"lun-sab": "07:30-22:00", "dom": "08:00-21:00"}, "telefono": "02 9268XXX", "servizi": ["parcheggio", "banco_gastronomia", "bar", "farmacia"]},
-        {"id": "lidl-pioltello", "nome": "Lidl Pioltello", "catena": "Lidl", "indirizzo": "Via Trieste 88, Pioltello MI", "lat": 45.4932, "lng": 9.3189, "orari": {"lun-sab": "08:00-21:30", "dom": "09:00-20:00"}, "telefono": "800 480XXX", "servizi": ["parcheggio", "panetteria"]},
-        {"id": "eurospin-pioltello", "nome": "Eurospin Pioltello", "catena": "Eurospin", "indirizzo": "Via Bergamo 56, Pioltello MI", "lat": 45.4889, "lng": 9.3367, "orari": {"lun-sab": "08:30-20:00", "dom": "09:00-13:00"}, "telefono": "02 9269XXX", "servizi": ["parcheggio"]},
-        {"id": "carrefour-segrate", "nome": "Carrefour Market Segrate", "catena": "Carrefour", "indirizzo": "Via Kennedy 15, Segrate MI", "lat": 45.4845, "lng": 9.2956, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 2135XXX", "servizi": ["parcheggio", "banco_gastronomia", "sushi"]},
-        {"id": "penny-pioltello", "nome": "Penny Market Pioltello", "catena": "Penny", "indirizzo": "Via Dante 22, Pioltello MI", "lat": 45.4901, "lng": 9.3298, "orari": {"lun-sab": "08:00-20:30", "dom": "09:00-13:00"}, "telefono": "02 9270XXX", "servizi": ["parcheggio"]},
-        {"id": "md-segrate", "nome": "MD Discount Segrate", "catena": "MD", "indirizzo": "Via Verdi 78, Segrate MI", "lat": 45.4867, "lng": 9.3012, "orari": {"lun-sab": "08:00-20:00", "dom": "09:00-13:30"}, "telefono": "02 2140XXX", "servizi": ["parcheggio"]},
-        {"id": "conad-pioltello", "nome": "Conad City Pioltello", "catena": "Conad", "indirizzo": "Via Mazzini 33, Pioltello MI", "lat": 45.4958, "lng": 9.3278, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 9271XXX", "servizi": ["parcheggio", "banco_gastronomia"]},
-        {"id": "aldi-segrate", "nome": "ALDI Segrate", "catena": "Aldi", "indirizzo": "Via Rivoltana 25, Segrate MI", "lat": 45.4823, "lng": 9.2898, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "800 090XXX", "servizi": ["parcheggio", "panetteria"]},
-        {"id": "despar-pioltello", "nome": "Despar Pioltello", "catena": "Despar", "indirizzo": "Via Garibaldi 15, Pioltello MI", "lat": 45.4941, "lng": 9.3334, "orari": {"lun-sab": "08:00-20:30", "dom": "09:00-13:00"}, "telefono": "02 9272XXX", "servizi": ["parcheggio"]},
-        {"id": "unes-cernusco", "nome": "Unes Cernusco Sul Naviglio", "catena": "Unes", "indirizzo": "Via Torino 50, Cernusco sul Naviglio MI", "lat": 45.5012, "lng": 9.3367, "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 9274XXX", "servizi": ["parcheggio", "banco_gastronomia", "sushi"]},
-        {"id": "iperal-pioltello", "nome": "Iperal Pioltello", "catena": "Iperal", "indirizzo": "Via Monza 88, Pioltello MI", "lat": 45.4990, "lng": 9.3198, "orari": {"lun-sab": "08:00-21:30", "dom": "09:00-20:00"}, "telefono": "02 9275XXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria", "farmacia"]}
+        # === LOMBARDIA - Pioltello/Segrate/Cernusco (Milano Est) ===
+        {"id": "coop-pioltello", "nome": "Coop Pioltello", "catena": "Coop", "indirizzo": "Via Roma 45, Pioltello MI", "lat": 45.4975, "lng": 9.3306, "regione": "Lombardia", "citta": "Pioltello", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 9267XXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria"]},
+        {"id": "esselunga-pioltello", "nome": "Esselunga Pioltello", "catena": "Esselunga", "indirizzo": "Via Milano 120, Pioltello MI", "lat": 45.5012, "lng": 9.3245, "regione": "Lombardia", "citta": "Pioltello", "orari": {"lun-sab": "07:30-22:00", "dom": "08:00-21:00"}, "telefono": "02 9268XXX", "servizi": ["parcheggio", "banco_gastronomia", "bar", "farmacia"]},
+        {"id": "lidl-pioltello", "nome": "Lidl Pioltello", "catena": "Lidl", "indirizzo": "Via Trieste 88, Pioltello MI", "lat": 45.4932, "lng": 9.3189, "regione": "Lombardia", "citta": "Pioltello", "orari": {"lun-sab": "08:00-21:30", "dom": "09:00-20:00"}, "telefono": "800 480XXX", "servizi": ["parcheggio", "panetteria"]},
+        {"id": "eurospin-pioltello", "nome": "Eurospin Pioltello", "catena": "Eurospin", "indirizzo": "Via Bergamo 56, Pioltello MI", "lat": 45.4889, "lng": 9.3367, "regione": "Lombardia", "citta": "Pioltello", "orari": {"lun-sab": "08:30-20:00", "dom": "09:00-13:00"}, "telefono": "02 9269XXX", "servizi": ["parcheggio"]},
+        {"id": "carrefour-segrate", "nome": "Carrefour Market Segrate", "catena": "Carrefour", "indirizzo": "Via Kennedy 15, Segrate MI", "lat": 45.4845, "lng": 9.2956, "regione": "Lombardia", "citta": "Segrate", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 2135XXX", "servizi": ["parcheggio", "banco_gastronomia", "sushi"]},
+        {"id": "penny-pioltello", "nome": "Penny Market Pioltello", "catena": "Penny", "indirizzo": "Via Dante 22, Pioltello MI", "lat": 45.4901, "lng": 9.3298, "regione": "Lombardia", "citta": "Pioltello", "orari": {"lun-sab": "08:00-20:30", "dom": "09:00-13:00"}, "telefono": "02 9270XXX", "servizi": ["parcheggio"]},
+        {"id": "md-segrate", "nome": "MD Discount Segrate", "catena": "MD", "indirizzo": "Via Verdi 78, Segrate MI", "lat": 45.4867, "lng": 9.3012, "regione": "Lombardia", "citta": "Segrate", "orari": {"lun-sab": "08:00-20:00", "dom": "09:00-13:30"}, "telefono": "02 2140XXX", "servizi": ["parcheggio"]},
+        {"id": "conad-pioltello", "nome": "Conad City Pioltello", "catena": "Conad", "indirizzo": "Via Mazzini 33, Pioltello MI", "lat": 45.4958, "lng": 9.3278, "regione": "Lombardia", "citta": "Pioltello", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 9271XXX", "servizi": ["parcheggio", "banco_gastronomia"]},
+        {"id": "aldi-segrate", "nome": "ALDI Segrate", "catena": "Aldi", "indirizzo": "Via Rivoltana 25, Segrate MI", "lat": 45.4823, "lng": 9.2898, "regione": "Lombardia", "citta": "Segrate", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "800 090XXX", "servizi": ["parcheggio", "panetteria"]},
+        {"id": "despar-pioltello", "nome": "Despar Pioltello", "catena": "Despar", "indirizzo": "Via Garibaldi 15, Pioltello MI", "lat": 45.4941, "lng": 9.3334, "regione": "Lombardia", "citta": "Pioltello", "orari": {"lun-sab": "08:00-20:30", "dom": "09:00-13:00"}, "telefono": "02 9272XXX", "servizi": ["parcheggio"]},
+        {"id": "unes-cernusco", "nome": "Unes Cernusco Sul Naviglio", "catena": "Unes", "indirizzo": "Via Torino 50, Cernusco sul Naviglio MI", "lat": 45.5012, "lng": 9.3367, "regione": "Lombardia", "citta": "Cernusco sul Naviglio", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 9274XXX", "servizi": ["parcheggio", "banco_gastronomia", "sushi"]},
+        {"id": "iperal-pioltello", "nome": "Iperal Pioltello", "catena": "Iperal", "indirizzo": "Via Monza 88, Pioltello MI", "lat": 45.4990, "lng": 9.3198, "regione": "Lombardia", "citta": "Pioltello", "orari": {"lun-sab": "08:00-21:30", "dom": "09:00-20:00"}, "telefono": "02 9275XXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria", "farmacia"]},
+        # === LOMBARDIA - Gallarate (Varese) ===
+        {"id": "esselunga-gallarate-pegoraro", "nome": "Esselunga Gallarate Via Pegoraro", "catena": "Esselunga", "indirizzo": "Via Pegoraro 2, Gallarate VA", "lat": 45.6603, "lng": 8.7917, "regione": "Lombardia", "citta": "Gallarate", "orari": {"lun-sab": "07:30-22:00", "dom": "08:00-21:00"}, "telefono": "0331 77XXXX", "servizi": ["parcheggio", "banco_gastronomia", "bar"]},
+        {"id": "esselunga-gallarate-borri", "nome": "Esselunga Gallarate Viale Borri", "catena": "Esselunga", "indirizzo": "Viale Borri 165, Gallarate VA", "lat": 45.6540, "lng": 8.7810, "regione": "Lombardia", "citta": "Gallarate", "orari": {"lun-sab": "07:30-22:00", "dom": "08:00-21:00"}, "telefono": "0331 78XXXX", "servizi": ["parcheggio", "banco_gastronomia", "farmacia"]},
+        {"id": "conad-gallarate", "nome": "Conad City Gallarate", "catena": "Conad", "indirizzo": "Via Manzoni 15, Gallarate VA", "lat": 45.6590, "lng": 8.7900, "regione": "Lombardia", "citta": "Gallarate", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "0331 79XXXX", "servizi": ["parcheggio", "banco_gastronomia"]},
+        {"id": "coop-gallarate", "nome": "Coop Gallarate", "catena": "Coop", "indirizzo": "Via Torino 33, Gallarate VA", "lat": 45.6620, "lng": 8.7880, "regione": "Lombardia", "citta": "Gallarate", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "0331 80XXXX", "servizi": ["parcheggio", "banco_gastronomia"]},
+        {"id": "carrefour-gallarate", "nome": "Carrefour Market Gallarate", "catena": "Carrefour", "indirizzo": "Via Milano 88, Gallarate VA", "lat": 45.6550, "lng": 8.7830, "regione": "Lombardia", "citta": "Gallarate", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "0331 81XXXX", "servizi": ["parcheggio", "banco_gastronomia"]},
+        {"id": "lidl-gallarate", "nome": "Lidl Gallarate", "catena": "Lidl", "indirizzo": "Via Cesare Battisti 20, Gallarate VA", "lat": 45.6580, "lng": 8.7950, "regione": "Lombardia", "citta": "Gallarate", "orari": {"lun-sab": "08:00-21:30", "dom": "09:00-20:00"}, "telefono": "800 480XXX", "servizi": ["parcheggio", "panetteria"]},
+        {"id": "iperal-gallarate", "nome": "Iperal Gallarate", "catena": "Iperal", "indirizzo": "Via Varese 45, Gallarate VA", "lat": 45.6610, "lng": 8.8000, "regione": "Lombardia", "citta": "Gallarate", "orari": {"lun-sab": "08:00-21:30", "dom": "09:00-20:00"}, "telefono": "0331 82XXXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria"]},
+        {"id": "ilgigante-gallarate", "nome": "Il Gigante Gallarate", "catena": "Il Gigante", "indirizzo": "Via Leonardo da Vinci 12, Gallarate VA", "lat": 45.6540, "lng": 8.7970, "regione": "Lombardia", "citta": "Gallarate", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "0331 83XXXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria"]},
+        {"id": "md-gallarate", "nome": "MD Discount Gallarate", "catena": "MD", "indirizzo": "Via Roma 67, Gallarate VA", "lat": 45.6630, "lng": 8.7860, "regione": "Lombardia", "citta": "Gallarate", "orari": {"lun-sab": "08:00-20:00", "dom": "09:00-13:30"}, "telefono": "0331 84XXXX", "servizi": ["parcheggio"]},
+        # === SICILIA - Catania ===
+        {"id": "conad-catania-umberto", "nome": "Conad Via Umberto I Catania", "catena": "Conad", "indirizzo": "Via Umberto I 188, Catania CT", "lat": 37.5079, "lng": 15.0830, "regione": "Sicilia", "citta": "Catania", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-13:30"}, "telefono": "095 31XXXX", "servizi": ["parcheggio", "banco_gastronomia"]},
+        {"id": "conad-catania-scannapieco", "nome": "Conad Via Scannapieco Catania", "catena": "Conad", "indirizzo": "Via Scannapieco 12, Catania CT", "lat": 37.5100, "lng": 15.0750, "regione": "Sicilia", "citta": "Catania", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-13:30"}, "telefono": "095 32XXXX", "servizi": ["parcheggio"]},
+        {"id": "deco-catania-galermo", "nome": "Deco Via Galermo Catania", "catena": "Deco", "indirizzo": "Via Galermo 277, Catania CT", "lat": 37.5200, "lng": 15.0670, "regione": "Sicilia", "citta": "Catania", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-14:00"}, "telefono": "095 33XXXX", "servizi": ["parcheggio", "banco_gastronomia"]},
+        {"id": "deco-catania-centro", "nome": "Deco Catania Centro", "catena": "Deco", "indirizzo": "Via Etnea 550, Catania CT", "lat": 37.5050, "lng": 15.0900, "regione": "Sicilia", "citta": "Catania", "orari": {"lun-sab": "08:00-20:30", "dom": "09:00-13:30"}, "telefono": "095 34XXXX", "servizi": ["banco_gastronomia"]},
+        {"id": "eurospin-catania", "nome": "Eurospin Catania", "catena": "Eurospin", "indirizzo": "Viale Mario Rapisardi 100, Catania CT", "lat": 37.5150, "lng": 15.0580, "regione": "Sicilia", "citta": "Catania", "orari": {"lun-sab": "08:30-20:30", "dom": "09:00-13:00"}, "telefono": "095 35XXXX", "servizi": ["parcheggio"]},
+        {"id": "lidl-catania", "nome": "Lidl Catania", "catena": "Lidl", "indirizzo": "Via Plebiscito 500, Catania CT", "lat": 37.5130, "lng": 15.0620, "regione": "Sicilia", "citta": "Catania", "orari": {"lun-sab": "08:00-21:30", "dom": "09:00-20:00"}, "telefono": "800 480XXX", "servizi": ["parcheggio", "panetteria"]},
+        {"id": "ipercoop-catania", "nome": "Ipercoop Centro Sicilia Catania", "catena": "Ipercoop", "indirizzo": "Viale Jonio 67, Catania CT", "lat": 37.5000, "lng": 15.0950, "regione": "Sicilia", "citta": "Catania", "orari": {"lun-sab": "09:00-21:00", "dom": "09:00-21:00"}, "telefono": "095 36XXXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria", "farmacia"]},
+        # === SICILIA - Palermo ===
+        {"id": "conad-palermo", "nome": "Conad Palermo Via Liberta", "catena": "Conad", "indirizzo": "Via Liberta 212, Palermo PA", "lat": 38.1157, "lng": 13.3615, "regione": "Sicilia", "citta": "Palermo", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-13:30"}, "telefono": "091 61XXXX", "servizi": ["parcheggio", "banco_gastronomia"]},
+        {"id": "deco-palermo", "nome": "Deco Palermo", "catena": "Deco", "indirizzo": "Via Notarbartolo 44, Palermo PA", "lat": 38.1100, "lng": 13.3580, "regione": "Sicilia", "citta": "Palermo", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-14:00"}, "telefono": "091 62XXXX", "servizi": ["parcheggio", "banco_gastronomia"]},
+        {"id": "eurospin-palermo", "nome": "Eurospin Palermo", "catena": "Eurospin", "indirizzo": "Viale Regione Siciliana 2300, Palermo PA", "lat": 38.1200, "lng": 13.3650, "regione": "Sicilia", "citta": "Palermo", "orari": {"lun-sab": "08:30-20:30", "dom": "09:00-13:00"}, "telefono": "091 63XXXX", "servizi": ["parcheggio"]},
+        {"id": "lidl-palermo", "nome": "Lidl Palermo", "catena": "Lidl", "indirizzo": "Via Ugo La Malfa 85, Palermo PA", "lat": 38.1180, "lng": 13.3700, "regione": "Sicilia", "citta": "Palermo", "orari": {"lun-sab": "08:00-21:30", "dom": "09:00-20:00"}, "telefono": "800 480XXX", "servizi": ["parcheggio", "panetteria"]},
+        {"id": "ipercoop-palermo", "nome": "Ipercoop Forum Palermo", "catena": "Ipercoop", "indirizzo": "Via Lanza di Scalea 2311, Palermo PA", "lat": 38.1050, "lng": 13.3520, "regione": "Sicilia", "citta": "Palermo", "orari": {"lun-sab": "09:00-21:00", "dom": "09:00-21:00"}, "telefono": "091 64XXXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria", "farmacia"]},
     ]
     
     # EXPANDED product categories
@@ -1460,10 +1534,23 @@ async def seed_database():
     }
     
     variazioni = {
+        # Pioltello/Milano Est
         "coop-pioltello": 1.0, "esselunga-pioltello": 1.05, "lidl-pioltello": 0.85,
         "eurospin-pioltello": 0.80, "carrefour-segrate": 0.95, "penny-pioltello": 0.82,
         "md-segrate": 0.78, "conad-pioltello": 0.98, "aldi-segrate": 0.83,
-        "despar-pioltello": 1.02, "unes-cernusco": 0.97, "iperal-pioltello": 1.03
+        "despar-pioltello": 1.02, "unes-cernusco": 0.97, "iperal-pioltello": 1.03,
+        # Gallarate
+        "esselunga-gallarate-pegoraro": 1.06, "esselunga-gallarate-borri": 1.05,
+        "conad-gallarate": 0.97, "coop-gallarate": 1.0, "carrefour-gallarate": 0.96,
+        "lidl-gallarate": 0.84, "iperal-gallarate": 1.02, "ilgigante-gallarate": 0.99,
+        "md-gallarate": 0.77,
+        # Catania (Sicilia ~3% piu caro per trasporto)
+        "conad-catania-umberto": 1.01, "conad-catania-scannapieco": 1.00,
+        "deco-catania-galermo": 0.96, "deco-catania-centro": 0.98,
+        "eurospin-catania": 0.82, "lidl-catania": 0.86, "ipercoop-catania": 1.04,
+        # Palermo (Sicilia)
+        "conad-palermo": 1.02, "deco-palermo": 0.97, "eurospin-palermo": 0.83,
+        "lidl-palermo": 0.87, "ipercoop-palermo": 1.05,
     }
     
     prodotti_data = []

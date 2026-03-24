@@ -39,6 +39,10 @@ CHAIN_MAP = {
     "unes": "unes",
     "u2 supermercato": "unes",
     "iperal": "iperal",
+    "il gigante": "il gigante",
+    "deco": "deco",
+    "decò": "deco",
+    "sigma": "deco",
 }
 
 SEARCH_TERMS = {

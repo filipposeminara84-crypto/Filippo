@@ -2,17 +2,19 @@ import React, { useState } from 'react';
 import { MapPin, Search, Loader2, X, Navigation, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const LOCATIONS_PIOLTELLO = [
-  { nome: "Pioltello Centro", lat: 45.4945, lng: 9.3256 },
-  { nome: "Pioltello - Seggiano", lat: 45.4988, lng: 9.3124 },
-  { nome: "Segrate", lat: 45.4882, lng: 9.2951 },
-  { nome: "Cernusco sul Naviglio", lat: 45.5230, lng: 9.3270 },
-  { nome: "Rodano", lat: 45.4782, lng: 9.3526 },
-  { nome: "Vignate", lat: 45.4959, lng: 9.3771 },
-  { nome: "Pantigliate", lat: 45.4447, lng: 9.3506 },
-  { nome: "Limito di Pioltello", lat: 45.5022, lng: 9.3408 },
-  { nome: "Milano - Lambrate", lat: 45.4850, lng: 9.2350 },
-  { nome: "Vimodrone", lat: 45.5149, lng: 9.2857 },
+const PRESET_LOCATIONS = [
+  // Lombardia
+  { nome: "Pioltello Centro", lat: 45.4945, lng: 9.3256, regione: "Lombardia" },
+  { nome: "Segrate", lat: 45.4882, lng: 9.2951, regione: "Lombardia" },
+  { nome: "Cernusco sul Naviglio", lat: 45.5230, lng: 9.3270, regione: "Lombardia" },
+  { nome: "Gallarate", lat: 45.6603, lng: 8.7917, regione: "Lombardia" },
+  { nome: "Milano - Lambrate", lat: 45.4850, lng: 9.2350, regione: "Lombardia" },
+  { nome: "Vimodrone", lat: 45.5149, lng: 9.2857, regione: "Lombardia" },
+  // Sicilia
+  { nome: "Catania Centro", lat: 37.5079, lng: 15.0830, regione: "Sicilia" },
+  { nome: "Catania - Via Galermo", lat: 37.5200, lng: 15.0670, regione: "Sicilia" },
+  { nome: "Palermo Centro", lat: 38.1157, lng: 13.3615, regione: "Sicilia" },
+  { nome: "Palermo - Forum", lat: 38.1050, lng: 13.3520, regione: "Sicilia" },
 ];
 
 export default function LocationPicker({ currentLocation, onLocationChange, onClose }) {
@@ -202,11 +204,11 @@ export default function LocationPicker({ currentLocation, onLocationChange, onCl
             )}
           </AnimatePresence>
 
-          {/* Quick Locations */}
+          {/* Quick Locations by Region */}
           <div>
-            <p className="text-xs text-stone-400 mb-2">Localita comuni</p>
-            <div className="space-y-1">
-              {LOCATIONS_PIOLTELLO.map((loc) => {
+            <p className="text-xs text-stone-400 mb-2">Lombardia</p>
+            <div className="space-y-1 mb-3">
+              {PRESET_LOCATIONS.filter(l => l.regione === 'Lombardia').map((loc) => {
                 const isSelected = Math.abs(currentLocation.lat - loc.lat) < 0.001 && Math.abs(currentLocation.lng - loc.lng) < 0.001;
                 return (
                   <button
@@ -226,6 +228,29 @@ export default function LocationPicker({ currentLocation, onLocationChange, onCl
                 );
               })}
             </div>
+            <p className="text-xs text-stone-400 mb-2">Sicilia</p>
+            <div className="space-y-1 mb-3">
+              {PRESET_LOCATIONS.filter(l => l.regione === 'Sicilia').map((loc) => {
+                const isSelected = Math.abs(currentLocation.lat - loc.lat) < 0.001 && Math.abs(currentLocation.lng - loc.lng) < 0.001;
+                return (
+                  <button
+                    key={loc.nome}
+                    onClick={() => selectLocation(loc)}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-colors text-left ${
+                      isSelected ? 'bg-emerald-100 border border-emerald-200' : 'hover:bg-stone-50'
+                    }`}
+                    data-testid={`location-${loc.nome.toLowerCase().replace(/\s+/g, '-')}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <MapPin className={`w-4 h-4 shrink-0 ${isSelected ? 'text-emerald-600' : 'text-stone-400'}`} />
+                      <span className={`text-sm ${isSelected ? 'text-emerald-700 font-medium' : 'text-stone-700'}`}>{loc.nome}</span>
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-emerald-600" />}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-stone-400 italic text-center mt-3">Copertura Lombardia e Sicilia. Espansione nazionale Q2 2026.</p>
           </div>
         </div>
       </motion.div>
