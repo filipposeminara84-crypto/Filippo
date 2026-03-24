@@ -20,20 +20,48 @@ export default function LocationPicker({ currentLocation, onLocationChange, onCl
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
+  const [geoResult, setGeoResult] = useState(null);
+
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1&zoom=18`
+      );
+      const data = await resp.json();
+      if (data && data.address) {
+        const a = data.address;
+        const via = a.road || a.pedestrian || a.footway || '';
+        const num = a.house_number || '';
+        const citta = a.city || a.town || a.village || a.municipality || '';
+        const parts = [via, num, citta].filter(Boolean);
+        return parts.join(', ') || data.display_name.split(',').slice(0, 3).join(', ');
+      }
+      return data.display_name?.split(',').slice(0, 3).join(', ') || null;
+    } catch {
+      return null;
+    }
+  };
 
   const handleSearch = async () => {
     if (!searchQuery.trim() || searchQuery.trim().length < 3) return;
     setSearching(true);
     try {
       const resp = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery + ', Italia')}&format=json&limit=5&countrycodes=it`
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery + ', Italia')}&format=json&limit=5&countrycodes=it&addressdetails=1`
       );
       const data = await resp.json();
-      setSearchResults(data.map(r => ({
-        nome: r.display_name.split(',').slice(0, 3).join(', '),
-        lat: parseFloat(r.lat),
-        lng: parseFloat(r.lon),
-      })));
+      setSearchResults(data.map(r => {
+        const a = r.address || {};
+        const via = a.road || a.pedestrian || a.footway || '';
+        const num = a.house_number || '';
+        const citta = a.city || a.town || a.village || a.municipality || '';
+        const parts = [via, num, citta].filter(Boolean);
+        return {
+          nome: parts.length >= 2 ? parts.join(', ') : r.display_name.split(',').slice(0, 3).join(', '),
+          lat: parseFloat(r.lat),
+          lng: parseFloat(r.lon),
+        };
+      }));
     } catch (err) {
       console.error('Geocoding error:', err);
     } finally {
@@ -44,9 +72,14 @@ export default function LocationPicker({ currentLocation, onLocationChange, onCl
   const handleGPS = () => {
     if (!navigator.geolocation) return;
     setGeoLoading(true);
+    setGeoResult(null);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        onLocationChange({ lat: pos.coords.latitude, lng: pos.coords.longitude, nome: 'Posizione GPS' });
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const address = await reverseGeocode(lat, lng);
+        const nome = address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        setGeoResult({ lat, lng, nome });
         setGeoLoading(false);
       },
       (err) => {
@@ -90,12 +123,41 @@ export default function LocationPicker({ currentLocation, onLocationChange, onCl
           <button
             onClick={handleGPS}
             disabled={geoLoading}
-            className="w-full flex items-center justify-center gap-2 h-11 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition-all active:scale-[0.98] mb-4"
+            className="w-full flex items-center justify-center gap-2 h-12 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-all active:scale-[0.98] mb-3"
             data-testid="use-gps-btn"
           >
-            {geoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
-            Usa GPS
+            {geoLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span className="text-lg">📍</span>}
+            Usa posizione attuale
           </button>
+
+          {/* GPS Result */}
+          <AnimatePresence>
+            {geoResult && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3"
+                data-testid="gps-result"
+              >
+                <div className="flex items-start gap-2">
+                  <MapPin className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-emerald-800 break-words" data-testid="gps-address">{geoResult.nome}</p>
+                    <p className="text-xs text-emerald-600 mt-0.5">{geoResult.lat.toFixed(5)}, {geoResult.lng.toFixed(5)}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { onLocationChange(geoResult); }}
+                  className="w-full mt-2 flex items-center justify-center gap-1.5 h-9 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition-all"
+                  data-testid="confirm-gps-btn"
+                >
+                  <Check className="w-4 h-4" />
+                  Usa questo indirizzo
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Search */}
           <div className="flex gap-2 mb-4">
