@@ -71,7 +71,20 @@ export default function RisultatiPage() {
   const navigate = useNavigate();
   const risultato = location.state?.risultato;
   const [expandedStore, setExpandedStore] = useState(null);
-  const [userPosition] = useState({ lat: 45.4945, lng: 9.3256 });
+  
+  // Get user position from navigation state or localStorage
+  const getUserPos = () => {
+    if (location.state?.userLocation) return location.state.userLocation;
+    try {
+      const saved = localStorage.getItem('shopply_location');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { lat: parsed.lat, lng: parsed.lng };
+      }
+    } catch {}
+    return { lat: 45.4945, lng: 9.3256 };
+  };
+  const [userPosition] = useState(getUserPos);
 
   // Calculate map bounds - always call hooks
   const bounds = useMemo(() => {

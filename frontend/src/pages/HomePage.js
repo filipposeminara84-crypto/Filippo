@@ -25,19 +25,34 @@ export default function HomePage() {
   const [ottimizzando, setOttimizzando] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [nomeListaSalvataggio, setNomeListaSalvataggio] = useState('');
-  const [userLocation, setUserLocation] = useState({ lat: 45.4945, lng: 9.3256 }); // Default Pioltello
+  // Load saved location from localStorage or use default
+  const getSavedLocation = () => {
+    try {
+      const saved = localStorage.getItem('shopply_location');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  };
+  
+  const savedLoc = getSavedLocation();
+  const [userLocation, setUserLocation] = useState(
+    savedLoc ? { lat: savedLoc.lat, lng: savedLoc.lng } : { lat: 45.4945, lng: 9.3256 }
+  );
   const [preferenze, setPreferenze] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedListaForShare, setSelectedListaForShare] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [locationName, setLocationName] = useState('Pioltello Centro');
+  const [locationName, setLocationName] = useState(savedLoc?.nome || 'Pioltello Centro');
   
   const inputRef = useRef(null);
 
   useEffect(() => {
     loadListeSalvate();
     loadPreferenze();
-    getUserLocation();
+    // Only auto-geolocate if no manual location is saved
+    if (!localStorage.getItem('shopply_location')) {
+      getUserLocation();
+    }
   }, []);
 
   const loadListeSalvate = async () => {
@@ -166,7 +181,7 @@ export default function HomePage() {
         peso_tempo: preferenze?.peso_tempo || 0.3
       });
       
-      navigate('/risultati', { state: { risultato: res.data, listaOriginale: listaSpesa } });
+      navigate('/risultati', { state: { risultato: res.data, listaOriginale: listaSpesa, userLocation } });
     } catch (err) {
       alert(err.response?.data?.detail || 'Errore nell\'ottimizzazione');
     } finally {
@@ -466,8 +481,11 @@ export default function HomePage() {
           <LocationPicker
             currentLocation={userLocation}
             onLocationChange={(loc) => {
-              setUserLocation({ lat: loc.lat, lng: loc.lng });
-              setLocationName(loc.nome || `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`);
+              const newLoc = { lat: loc.lat, lng: loc.lng };
+              const newName = loc.nome || `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`;
+              setUserLocation(newLoc);
+              setLocationName(newName);
+              localStorage.setItem('shopply_location', JSON.stringify({ ...newLoc, nome: newName }));
               setShowLocationPicker(false);
             }}
             onClose={() => setShowLocationPicker(false)}
