@@ -13,6 +13,7 @@ from routes.notifiche import router as notifiche_router
 from routes.ottimizza import router as ottimizza_router
 from routes.scraper_routes import router as scraper_router
 from routes.seed import router as seed_router
+from routes.immagini import router as immagini_router
 from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -31,6 +32,7 @@ api_router.include_router(notifiche_router)
 api_router.include_router(ottimizza_router)
 api_router.include_router(scraper_router)
 api_router.include_router(seed_router)
+api_router.include_router(immagini_router)
 
 
 @api_router.get("/")

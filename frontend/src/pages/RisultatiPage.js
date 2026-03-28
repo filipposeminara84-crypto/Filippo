@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { formatPrice, formatTime } from '../lib/utils';
 import Layout from '../components/Layout';
+import ProductTooltip from '../components/ProductTooltip';
 import 'leaflet/dist/leaflet.css';
 
 // Fix Leaflet default icon issue
@@ -352,9 +353,21 @@ export default function RisultatiPage() {
                       <div
                         key={prodIdx}
                         className="flex items-center justify-between py-2 border-b border-stone-50 last:border-0"
+                        data-testid={`product-row-${prodIdx}`}
                       >
-                        <span className="text-stone-700">{prod.prodotto}</span>
-                        <span className="font-mono text-stone-900">{formatPrice(prod.prezzo)}</span>
+                        <ProductTooltip productName={prod.prodotto}>
+                          <span className="text-stone-700 hover:text-emerald-600 transition-colors border-b border-dashed border-stone-300 hover:border-emerald-400">
+                            {prod.prodotto}
+                          </span>
+                        </ProductTooltip>
+                        <div className="flex items-center gap-2">
+                          {prod.in_offerta && (
+                            <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-medium">
+                              Offerta
+                            </span>
+                          )}
+                          <span className="font-mono text-stone-900">{formatPrice(prod.prezzo)}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
