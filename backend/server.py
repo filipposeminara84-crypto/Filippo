@@ -359,7 +359,7 @@ async def register(user_data: UserCreate):
         # Notify new user about bonus
         await create_notification(
             user_id, "referral",
-            f"🎁 Bonus di benvenuto!",
+            "🎁 Bonus di benvenuto!",
             f"Hai ricevuto {REFERRAL_PUNTI_INVITATO} punti grazie all'invito di {invitante['nome']}!",
             link="/referral"
         )
@@ -443,7 +443,7 @@ async def forgot_password(req: PasswordResetRequest):
     await create_notification(
         user["id"], "sistema",
         "🔐 Richiesta reset password",
-        f"Clicca qui per reimpostare la password. Il link scade tra 1 ora.",
+        "Clicca qui per reimpostare la password. Il link scade tra 1 ora.",
         link=f"/reset-password?token={reset_token}"
     )
     
@@ -650,7 +650,7 @@ async def riscatta_punti(punti: int, current_user: dict = Depends(get_current_us
     # Notify user
     await create_notification(
         current_user["id"], "referral",
-        f"💰 Sconto riscattato!",
+        "💰 Sconto riscattato!",
         f"Hai riscattato {punti} punti per uno sconto di €{sconto_euro:.2f}",
         link="/referral"
     )
@@ -981,7 +981,7 @@ async def invita_membro(invito: InvitoFamiglia, current_user: dict = Depends(get
         await create_notification(
             invitato["id"], "condivisione",
             f"👨‍👩‍👧‍👦 Invito famiglia da {current_user['nome']}",
-            f"Sei stato invitato a unirti alla famiglia. Vai nelle impostazioni per accettare.",
+            "Sei stato invitato a unirti alla famiglia. Vai nelle impostazioni per accettare.",
             link="/impostazioni"
         )
     

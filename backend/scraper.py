@@ -280,13 +280,8 @@ async def cross_reference_prices(db, search_term: str) -> List[Dict]:
             by_product[nome] = []
         by_product[nome].append(p)
 
-    # For each product, find which stores DON'T have it and estimate
-    all_stores = await db.supermercati.find({}, {"_id": 0, "id": 1, "catena": 1}).to_list(100)
-
+    # For each product, check staleness of known prices
     for nome, store_prices in by_product.items():
-        existing_store_ids = {p["supermercato_id"] for p in store_prices}
-        avg_price = sum(p["prezzo"] for p in store_prices) / len(store_prices)
-
         # Check staleness: flag if last update > 7 days
         for p in store_prices:
             update_str = p.get("data_aggiornamento", "")
