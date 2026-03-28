@@ -209,44 +209,48 @@ async def update_prices_from_scraping(db, scraped_data: List[Dict], supermarkets
             if not stores:
                 continue
 
-            # Extract first meaningful word from product name for matching
+            # Extract meaningful search words from product name
             raw_name = item["nome_prodotto"]
-            # Remove brand prefix "Brand - Product"
             if " - " in raw_name:
                 raw_name = raw_name.split(" - ", 1)[1]
-            # Take first two words for matching
-            words = [w for w in raw_name.split() if len(w) > 2]
+            # Get multiple words for broader matching
+            words = [w for w in raw_name.split() if len(w) > 2 and w.lower() not in ('del', 'dei', 'con', 'per', 'alla', 'alle', 'allo')]
             if not words:
                 continue
-            search_regex = words[0]
 
             for store in stores:
-                existing = await db.prodotti.find_one({
-                    "supermercato_id": store["id"],
-                    "nome_prodotto": {"$regex": search_regex, "$options": "i"}
-                }, {"_id": 0})
+                # Try matching with multiple strategies
+                matched = False
+                for word in words[:3]:
+                    if matched:
+                        break
+                    existing = await db.prodotti.find_one({
+                        "supermercato_id": store["id"],
+                        "nome_prodotto": {"$regex": word, "$options": "i"}
+                    }, {"_id": 0})
 
-                if existing:
-                    update_data = {
-                        "prezzo": item["prezzo"],
-                        "data_aggiornamento": datetime.now(timezone.utc).isoformat(),
-                        "fonte_prezzo": "doveconviene",
-                    }
-                    if item["in_offerta"]:
-                        update_data["in_offerta"] = True
-                        update_data["sconto_percentuale"] = item["sconto_percentuale"]
-                        update_data["prezzo_precedente"] = item["prezzo_precedente"]
-                        new_offers += 1
-                    else:
-                        update_data["in_offerta"] = False
-                        update_data["sconto_percentuale"] = None
-                        update_data["prezzo_precedente"] = None
+                    if existing:
+                        update_data = {
+                            "prezzo": item["prezzo"],
+                            "data_aggiornamento": datetime.now(timezone.utc).isoformat(),
+                            "fonte_prezzo": "doveconviene",
+                        }
+                        if item["in_offerta"]:
+                            update_data["in_offerta"] = True
+                            update_data["sconto_percentuale"] = item["sconto_percentuale"]
+                            update_data["prezzo_precedente"] = item["prezzo_precedente"]
+                            new_offers += 1
+                        else:
+                            update_data["in_offerta"] = False
+                            update_data["sconto_percentuale"] = None
+                            update_data["prezzo_precedente"] = None
 
-                    await db.prodotti.update_one(
-                        {"id": existing["id"]},
-                        {"$set": update_data}
-                    )
-                    updated += 1
+                        await db.prodotti.update_one(
+                            {"id": existing["id"]},
+                            {"$set": update_data}
+                        )
+                        updated += 1
+                        matched = True
         except Exception as e:
             errors += 1
             logger.error(f"Error updating price: {e}")

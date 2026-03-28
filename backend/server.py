@@ -147,6 +147,7 @@ class OttimizzaResponse(BaseModel):
     risparmio_percentuale: float
     num_supermercati: int
     distanza_totale_km: float
+    prodotti_non_trovati: List[str] = []
 
 class RicercaStorica(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1193,10 +1194,12 @@ async def ottimizza_spesa(req: OttimizzaRequest, current_user: dict = Depends(ge
     assegnazioni = {}
     costo_totale = 0.0
     costo_peggiore = 0.0
+    prodotti_non_trovati = []
     
     for prodotto_richiesto in req.lista_prodotti:
         prodotto_lower = prodotto_richiesto.lower()
         if prodotto_lower not in prezzi_map:
+            prodotti_non_trovati.append(prodotto_richiesto)
             continue
         
         miglior_score = float('inf')
@@ -1236,8 +1239,40 @@ async def ottimizza_spesa(req: OttimizzaRequest, current_user: dict = Depends(ge
             costo_peggiore += prezzo_max if prezzo_max > 0 else miglior_prezzo
     
     if len(assegnazioni) > req.max_supermercati:
+        # Keep stores with most products, reassign dropped products to remaining stores
         sorted_sups = sorted(assegnazioni.items(), key=lambda x: len(x[1]), reverse=True)
-        assegnazioni = dict(sorted_sups[:req.max_supermercati])
+        kept_stores = dict(sorted_sups[:req.max_supermercati])
+        kept_store_ids = set(kept_stores.keys())
+        dropped_stores = dict(sorted_sups[req.max_supermercati:])
+        
+        # Reassign dropped products to cheapest available kept store
+        for dropped_sup_id, dropped_products in dropped_stores.items():
+            for prod_info in dropped_products:
+                prodotto_lower = prod_info["prodotto"].lower()
+                best_price = float('inf')
+                best_kept_id = None
+                
+                for kept_id in kept_store_ids:
+                    if prodotto_lower in prezzi_map and kept_id in prezzi_map[prodotto_lower]:
+                        p = prezzi_map[prodotto_lower][kept_id]["prezzo"]
+                        if p < best_price:
+                            best_price = p
+                            best_kept_id = kept_id
+                
+                if best_kept_id:
+                    kept_stores[best_kept_id].append({
+                        "prodotto": prod_info["prodotto"],
+                        "prezzo": best_price,
+                        "in_offerta": prezzi_map.get(prodotto_lower, {}).get(best_kept_id, {}).get("in_offerta", False)
+                    })
+                else:
+                    # No kept store has this product - add to nearest kept store at original price
+                    first_kept = list(kept_store_ids)[0]
+                    kept_stores[first_kept].append(prod_info)
+        
+        assegnazioni = kept_stores
+        # Recalculate costo_totale
+        costo_totale = sum(p["prezzo"] for prods in assegnazioni.values() for p in prods)
     
     piano = []
     pos_corrente = (req.lat_utente, req.lng_utente)
@@ -1311,7 +1346,8 @@ async def ottimizza_spesa(req: OttimizzaRequest, current_user: dict = Depends(ge
         risparmio_euro=round(risparmio, 2),
         risparmio_percentuale=round(risparmio_perc, 1),
         num_supermercati=len(piano),
-        distanza_totale_km=round(distanza_totale, 2)
+        distanza_totale_km=round(distanza_totale, 2),
+        prodotti_non_trovati=prodotti_non_trovati
     )
 
 # ============== STORICO ==============

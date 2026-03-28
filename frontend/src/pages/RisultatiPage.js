@@ -133,7 +133,7 @@ export default function RisultatiPage() {
     );
   }
 
-  const { piano_ottimale, costo_totale, tempo_stimato_min, risparmio_euro, risparmio_percentuale, distanza_totale_km } = risultato;
+  const { piano_ottimale, costo_totale, tempo_stimato_min, risparmio_euro, risparmio_percentuale, distanza_totale_km, prodotti_non_trovati } = risultato;
 
   return (
     <Layout>
@@ -211,6 +211,25 @@ export default function RisultatiPage() {
             <p className="text-xs text-stone-500">{distanza_totale_km} km</p>
           </motion.div>
         </div>
+
+        {/* Warning: products not found */}
+        {prodotti_non_trovati && prodotti_non_trovati.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-orange-50 border border-orange-200 rounded-2xl p-4"
+            data-testid="products-not-found"
+          >
+            <p className="text-sm font-medium text-orange-700 mb-1">
+              Prodotti non disponibili nella tua zona:
+            </p>
+            <ul className="text-sm text-orange-600">
+              {prodotti_non_trovati.map((p, i) => (
+                <li key={i}>- {p}</li>
+              ))}
+            </ul>
+          </motion.div>
+        )}
 
         {/* Map */}
         <motion.div
