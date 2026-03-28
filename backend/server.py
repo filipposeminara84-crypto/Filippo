@@ -14,8 +14,13 @@ import jwt
 import bcrypt
 import math
 import random
+import re as re_module
 import asyncio
-from scraper import scrape_doveconviene, scrape_all_categories, update_prices_from_scraping, SEARCH_TERMS
+from scraper import (
+    scrape_doveconviene, scrape_all_categories, update_prices_from_scraping,
+    scrape_product_multi, scrape_pepesto, cross_reference_prices,
+    SEARCH_TERMS, SOURCES,
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1158,6 +1163,62 @@ async def ultimo_aggiornamento():
     ultimo = await db.aggiornamenti_prezzi.find_one({}, {"_id": 0}, sort=[("timestamp", -1)])
     return ultimo or {"message": "Nessun aggiornamento"}
 
+# ============== PRODUCT MATCHING HELPERS ==============
+
+_QTY_PATTERN = re_module.compile(
+    r'\s+\d+\s*(ml|l|lt|cl|g|gr|kg|pz|pezzi|conf|confezione)\b\.?\s*$',
+    re_module.IGNORECASE,
+)
+_TRAILING_NUM = re_module.compile(r'\s+\d+$')
+
+def _normalize_product_name(name: str) -> str:
+    """Strip quantity/unit suffixes for flexible matching.
+    'Olio Extravergine 1L' -> 'Olio Extravergine'
+    'Pasta Barilla 500g'   -> 'Pasta Barilla'
+    'Latte Intero'         -> 'Latte Intero'  (unchanged)
+    """
+    n = _QTY_PATTERN.sub('', name).strip()
+    n = _TRAILING_NUM.sub('', n).strip()
+    return n if n else name
+
+def _best_match_key(requested: str, prezzi_map: dict) -> str | None:
+    """Find the best matching key in prezzi_map for a requested product.
+    Strategy: exact > normalized-exact > starts-with > contains.
+    """
+    req_lower = requested.lower()
+    # 1. Exact match
+    if req_lower in prezzi_map:
+        return req_lower
+    # 2. Normalized exact match (strip qty from request)
+    norm = _normalize_product_name(requested).lower()
+    if norm in prezzi_map:
+        return norm
+    # 3. DB name starts with the normalized request ("Olio Extravergine" matches "Olio Extravergine Bio")
+    #    or request starts with DB name ("Olio Extravergine 1L" starts with "Olio Extravergine")
+    best_key = None
+    best_score = 0
+    for db_key in prezzi_map:
+        db_norm = _normalize_product_name(db_key).lower()
+        if db_norm == norm:
+            return db_key  # normalized names are identical
+        if db_norm.startswith(norm) or norm.startswith(db_norm):
+            score = len(set(norm.split()) & set(db_norm.split()))
+            if score > best_score:
+                best_score = score
+                best_key = db_key
+    if best_key:
+        return best_key
+    # 4. Fuzzy: check if all words from request exist in any DB key
+    req_words = set(norm.split())
+    for db_key in prezzi_map:
+        db_words = set(_normalize_product_name(db_key).lower().split())
+        if req_words and req_words.issubset(db_words) or db_words.issubset(req_words):
+            overlap = len(req_words & db_words)
+            if overlap > best_score:
+                best_score = overlap
+                best_key = db_key
+    return best_key
+
 # ============== OTTIMIZZAZIONE ==============
 
 @api_router.post("/ottimizza", response_model=OttimizzaResponse)
@@ -1174,12 +1235,19 @@ async def ottimizza_spesa(req: OttimizzaRequest, current_user: dict = Depends(ge
     if not supermercati_vicini:
         raise HTTPException(status_code=400, detail="Nessun supermercato trovato nel raggio specificato")
     
-    # OPTIMIZED: Query only products matching requested names with projection
-    prodotti_richiesti_lower = [p.lower() for p in req.lista_prodotti]
+    # FUZZY MATCHING: Build regex patterns from normalized product names
+    regex_parts = []
+    for p in req.lista_prodotti:
+        norm = _normalize_product_name(p)
+        escaped = re_module.escape(norm)
+        regex_parts.append(escaped)
+    # Remove duplicates while preserving order
+    regex_parts = list(dict.fromkeys(regex_parts))
+    
     prodotti_db = await db.prodotti.find(
-        {"nome_prodotto": {"$regex": f"^({'|'.join(req.lista_prodotti)})$", "$options": "i"}},
+        {"nome_prodotto": {"$regex": f"({'|'.join(regex_parts)})", "$options": "i"}},
         {"_id": 0, "nome_prodotto": 1, "supermercato_id": 1, "prezzo": 1, "in_offerta": 1}
-    ).to_list(500)
+    ).to_list(1000)
     
     prezzi_map = {}
     for prod in prodotti_db:
@@ -1198,7 +1266,8 @@ async def ottimizza_spesa(req: OttimizzaRequest, current_user: dict = Depends(ge
     
     for prodotto_richiesto in req.lista_prodotti:
         prodotto_lower = prodotto_richiesto.lower()
-        if prodotto_lower not in prezzi_map:
+        matched_key = _best_match_key(prodotto_richiesto, prezzi_map)
+        if matched_key is None:
             prodotti_non_trovati.append(prodotto_richiesto)
             continue
         
@@ -1209,10 +1278,10 @@ async def ottimizza_spesa(req: OttimizzaRequest, current_user: dict = Depends(ge
         prezzo_max = 0
         
         for sup in supermercati_vicini:
-            if sup["id"] not in prezzi_map[prodotto_lower]:
+            if sup["id"] not in prezzi_map[matched_key]:
                 continue
             
-            info_prezzo = prezzi_map[prodotto_lower][sup["id"]]
+            info_prezzo = prezzi_map[matched_key][sup["id"]]
             prezzo = info_prezzo["prezzo"]
             distanza = sup["distanza"]
             
@@ -1375,8 +1444,10 @@ async def mark_eseguita(ricerca_id: str, current_user: dict = Depends(get_curren
 async def get_matrice_prezzi(prodotti: List[str]):
     result = {}
     for prodotto in prodotti:
+        norm = _normalize_product_name(prodotto)
+        escaped = re_module.escape(norm)
         prezzi_prodotto = await db.prodotti.find(
-            {"nome_prodotto": {"$regex": f"^{prodotto}$", "$options": "i"}},
+            {"nome_prodotto": {"$regex": escaped, "$options": "i"}},
             {"_id": 0, "supermercato_id": 1, "prezzo": 1, "in_offerta": 1, "sconto_percentuale": 1}
         ).to_list(100)
         result[prodotto] = {
@@ -1652,22 +1723,32 @@ scraping_status = {
 }
 
 @api_router.post("/scraper/run")
-async def run_scraper(background_tasks: BackgroundTasks, search_term: Optional[str] = None, user=Depends(get_current_user)):
-    """Avvia lo scraping dei prezzi da DoveConviene"""
+async def run_scraper(background_tasks: BackgroundTasks, search_term: Optional[str] = None, fonti: Optional[List[str]] = None, user=Depends(get_current_user)):
+    """Avvia lo scraping multi-fonte dei prezzi"""
     if scraping_status["in_corso"]:
-        raise HTTPException(status_code=409, detail="Scraping già in corso")
+        raise HTTPException(status_code=409, detail="Scraping gia in corso")
+
+    active_sources = fonti or list(SOURCES.keys())
 
     async def do_scraping():
         scraping_status["in_corso"] = True
         scraping_status["log"] = []
         try:
+            scraping_status["log"].append(f"Fonti attive: {', '.join(active_sources)}")
             if search_term:
                 scraping_status["log"].append(f"Scraping prodotto: {search_term}")
-                results = await scrape_doveconviene(search_term)
+                results = await scrape_product_multi(search_term, active_sources)
                 scraping_status["log"].append(f"Trovati {len(results)} risultati per '{search_term}'")
+                # Log per fonte
+                by_source = {}
+                for r in results:
+                    src = r.get("fonte", "unknown")
+                    by_source[src] = by_source.get(src, 0) + 1
+                for src, count in by_source.items():
+                    scraping_status["log"].append(f"  {src}: {count} prodotti")
             else:
                 scraping_status["log"].append("Scraping completo di tutte le categorie...")
-                data = await scrape_all_categories()
+                data = await scrape_all_categories(active_sources)
                 results = []
                 for cat, items in data["categorie"].items():
                     results.extend(items)
@@ -1687,6 +1768,7 @@ async def run_scraper(background_tasks: BackgroundTasks, search_term: Optional[s
                 "errori": update_result["errori"],
                 "tipo": "singolo" if search_term else "completo",
                 "search_term": search_term,
+                "fonti": active_sources,
             }
             await db.scraping_log.insert_one({**log_entry})
 
@@ -1700,7 +1782,7 @@ async def run_scraper(background_tasks: BackgroundTasks, search_term: Optional[s
             scraping_status["ultimo_scraping"] = datetime.now(timezone.utc).isoformat()
 
     background_tasks.add_task(do_scraping)
-    return {"message": "Scraping avviato in background", "tipo": "singolo" if search_term else "completo"}
+    return {"message": "Scraping avviato in background", "tipo": "singolo" if search_term else "completo", "fonti": active_sources}
 
 @api_router.get("/scraper/status")
 async def get_scraper_status(user=Depends(get_current_user)):
@@ -1717,17 +1799,40 @@ async def get_scraper_log(limit: int = 20, user=Depends(get_current_user)):
 
 @api_router.get("/scraper/categories")
 async def get_scraper_categories(user=Depends(get_current_user)):
-    """Lista categorie e termini di ricerca disponibili per lo scraping"""
-    return {cat: terms for cat, terms in SEARCH_TERMS.items()}
+    """Lista categorie, termini di ricerca e fonti disponibili per lo scraping"""
+    fonti = list(SOURCES.keys()) + ["cross_reference"]
+    return {
+        "categorie": {cat: terms for cat, terms in SEARCH_TERMS.items()},
+        "fonti_disponibili": fonti,
+    }
 
-@api_router.post("/scraper/search-preview")
-async def scraper_search_preview(search_term: str, user=Depends(get_current_user)):
-    """Cerca un prodotto su DoveConviene senza aggiornare il DB (anteprima)"""
-    results = await scrape_doveconviene(search_term)
+@api_router.post("/scraper/cross-reference")
+async def run_cross_reference(search_term: str, user=Depends(get_current_user)):
+    """Analizza prezzi esistenti e stima quelli mancanti"""
+    results = await cross_reference_prices(db, search_term)
     return {
         "search_term": search_term,
         "risultati": len(results),
-        "prodotti": results[:30]
+        "dati": results[:50],
+    }
+
+@api_router.post("/scraper/search-preview")
+async def scraper_search_preview(search_term: str, fonti: Optional[List[str]] = None, user=Depends(get_current_user)):
+    """Cerca un prodotto su tutte le fonti senza aggiornare il DB (anteprima)"""
+    active_sources = fonti or list(SOURCES.keys())
+    results = await scrape_product_multi(search_term, active_sources)
+    # Group by source
+    by_source = {}
+    for r in results:
+        src = r.get("fonte", "unknown")
+        if src not in by_source:
+            by_source[src] = []
+        by_source[src].append(r)
+    return {
+        "search_term": search_term,
+        "risultati_totali": len(results),
+        "per_fonte": {k: len(v) for k, v in by_source.items()},
+        "prodotti": results[:50],
     }
 
 # ============== HEALTH ==============

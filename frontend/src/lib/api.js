@@ -115,11 +115,18 @@ export const prezziAPI = {
 
 // Scraper / Prezzi
 export const scraperAPI = {
-  run: (search_term) => api.post('/scraper/run', null, { params: search_term ? { search_term } : {} }),
+  run: (search_term, fonti) => {
+    const params = {};
+    if (search_term) params.search_term = search_term;
+    return api.post('/scraper/run', fonti || null, { params });
+  },
   status: () => api.get('/scraper/status'),
   log: (limit = 20) => api.get('/scraper/log', { params: { limit } }),
   categories: () => api.get('/scraper/categories'),
-  searchPreview: (search_term) => api.post('/scraper/search-preview', null, { params: { search_term } }),
+  searchPreview: (search_term, fonti) => {
+    const params = { search_term };
+    return api.post('/scraper/search-preview', fonti || null, { params });
+  },
 };
 
 // Seed
