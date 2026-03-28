@@ -42,16 +42,18 @@ export default function HomePage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedListaForShare, setSelectedListaForShare] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [locationName, setLocationName] = useState(savedLoc?.nome || 'Pioltello Centro');
+  const [locationName, setLocationName] = useState(savedLoc?.nome || 'Imposta posizione');
+  const [locationReady, setLocationReady] = useState(!!savedLoc);
   
   const inputRef = useRef(null);
 
   useEffect(() => {
     loadListeSalvate();
     loadPreferenze();
-    // Only auto-geolocate if no manual location is saved
     if (!localStorage.getItem('shopply_location')) {
       getUserLocation();
+    } else {
+      setLocationReady(true);
     }
   }, []);
 
@@ -73,17 +75,37 @@ export default function HomePage() {
     }
   };
 
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1&zoom=16`
+      );
+      const data = await resp.json();
+      if (data?.address) {
+        const a = data.address;
+        const via = a.road || a.pedestrian || a.footway || '';
+        const citta = a.city || a.town || a.village || a.municipality || '';
+        return [via, citta].filter(Boolean).join(', ') || citta || null;
+      }
+    } catch {}
+    return null;
+  };
+
   const getUserLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setUserLocation({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude
-          });
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const nome = await reverseGeocode(lat, lng) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+          setUserLocation({ lat, lng });
+          setLocationName(nome);
+          setLocationReady(true);
+          localStorage.setItem('shopply_location', JSON.stringify({ lat, lng, nome }));
         },
-        (err) => {
-          console.log('Geolocation error, using default location:', err.message);
+        () => {
+          // GPS failed or denied: open location picker
+          setShowLocationPicker(true);
         },
         {
           enableHighAccuracy: true,
@@ -91,6 +113,9 @@ export default function HomePage() {
           maximumAge: 60000
         }
       );
+    } else {
+      // No geolocation support: open location picker
+      setShowLocationPicker(true);
     }
   };
 
@@ -214,15 +239,25 @@ export default function HomePage() {
         {/* Location Bar */}
         <button
           onClick={() => setShowLocationPicker(true)}
-          className="w-full flex items-center gap-3 bg-white rounded-2xl shadow-sm border border-stone-100 px-4 py-3 hover:border-emerald-300 transition-colors"
+          className={`w-full flex items-center gap-3 rounded-2xl shadow-sm border px-4 py-3 transition-colors ${
+            locationReady 
+              ? 'bg-white border-stone-100 hover:border-emerald-300' 
+              : 'bg-orange-50 border-orange-200 animate-pulse'
+          }`}
           data-testid="location-bar"
         >
-          <MapPin className="w-5 h-5 text-emerald-500" />
+          <MapPin className={`w-5 h-5 ${locationReady ? 'text-emerald-500' : 'text-orange-500'}`} />
           <div className="flex-1 text-left">
-            <p className="text-sm font-medium text-stone-700">{locationName}</p>
-            <p className="text-xs text-stone-400">{userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}</p>
+            <p className={`text-sm font-medium ${locationReady ? 'text-stone-700' : 'text-orange-700'}`}>
+              {locationReady ? locationName : 'Imposta la tua posizione'}
+            </p>
+            {locationReady && (
+              <p className="text-xs text-stone-400">{userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}</p>
+            )}
           </div>
-          <span className="text-xs text-emerald-500 font-medium">Cambia</span>
+          <span className={`text-xs font-medium ${locationReady ? 'text-emerald-500' : 'text-orange-600'}`}>
+            {locationReady ? 'Cambia' : 'Imposta'}
+          </span>
         </button>
 
         {/* Input Lista */}
@@ -485,6 +520,7 @@ export default function HomePage() {
               const newName = loc.nome || `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`;
               setUserLocation(newLoc);
               setLocationName(newName);
+              setLocationReady(true);
               localStorage.setItem('shopply_location', JSON.stringify({ ...newLoc, nome: newName }));
               setShowLocationPicker(false);
             }}
