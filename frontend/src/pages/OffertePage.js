@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Tag, TrendingDown, Store, RefreshCw, Loader2, Sparkles, Plus, Check, ShoppingCart } from 'lucide-react';
+import { Tag, TrendingDown, Store, RefreshCw, Loader2, Sparkles, Plus, Check, ShoppingCart, MapPin } from 'lucide-react';
 import { prodottiAPI, supermercatiAPI, prezziAPI } from '../lib/api';
 import { formatPrice } from '../lib/utils';
 import Layout from '../components/Layout';
@@ -25,26 +25,68 @@ export default function OffertePage() {
   const [categorie, setCategorie] = useState([]);
   const [addedProducts, setAddedProducts] = useState(new Set());
   const [showToast, setShowToast] = useState(null);
+  const [location, setLocation] = useState(null);
+  const [locationLabel, setLocationLabel] = useState('');
+  const [locationReady, setLocationReady] = useState(false);
 
   useEffect(() => {
-    loadData();
-    // Initialize addedProducts from existing quick list
     const existing = getQuickList();
     setAddedProducts(new Set(existing.map(p => p.toLowerCase())));
+
+    // Read saved location
+    const savedLoc = localStorage.getItem('shopply_location');
+    if (savedLoc) {
+      try {
+        const loc = JSON.parse(savedLoc);
+        setLocation(loc);
+        setLocationLabel(loc.label || `${loc.lat.toFixed(2)}, ${loc.lng.toFixed(2)}`);
+      } catch {}
+    }
+    setLocationReady(true);
   }, []);
 
-  const loadData = async () => {
+  useEffect(() => {
+    if (!locationReady) return;
+    loadData(location);
+  }, [locationReady, location]);
+
+  const loadData = async (loc) => {
+    setLoading(true);
     try {
-      const [offerteRes, supRes, catRes, aggRes] = await Promise.all([
+      // Get nearby stores or all stores
+      let nearbyIds = null;
+      const supMap = {};
+
+      if (loc) {
+        const nearbyRes = await supermercatiAPI.nearby(loc.lat, loc.lng, 15);
+        nearbyRes.data.forEach(s => { supMap[s.id] = s; });
+        nearbyIds = new Set(nearbyRes.data.map(s => s.id));
+      } else {
+        const supRes = await supermercatiAPI.getAll();
+        supRes.data.forEach(s => { supMap[s.id] = s; });
+      }
+      setSupermercati(supMap);
+
+      const [offerteRes, catRes, aggRes] = await Promise.all([
         prodottiAPI.getOfferte(),
-        supermercatiAPI.getAll(),
         prodottiAPI.getCategorie(),
         prezziAPI.ultimoAggiornamento()
       ]);
-      setOfferte(offerteRes.data);
-      const supMap = {};
-      supRes.data.forEach(s => supMap[s.id] = s);
-      setSupermercati(supMap);
+
+      // Filter offers to only nearby stores
+      const allOfferte = offerteRes.data;
+      if (nearbyIds) {
+        const filtered = {};
+        Object.entries(allOfferte).forEach(([storeId, prods]) => {
+          if (nearbyIds.has(storeId)) {
+            filtered[storeId] = prods;
+          }
+        });
+        setOfferte(filtered);
+      } else {
+        setOfferte(allOfferte);
+      }
+
       setCategorie(catRes.data);
       setUltimoAggiornamento(aggRes.data);
     } catch (err) {
@@ -59,7 +101,7 @@ export default function OffertePage() {
     try {
       await prezziAPI.aggiorna();
       setTimeout(async () => {
-        await loadData();
+        await loadData(location);
         setAggiornando(false);
       }, 2000);
     } catch (err) {
@@ -131,6 +173,13 @@ export default function OffertePage() {
               Offerte del Giorno
             </h1>
             <p className="text-stone-500">{getTotaleOfferte()} prodotti in promozione</p>
+            {locationLabel && (
+              <div className="flex items-center gap-1.5 mt-1 text-sm text-emerald-600" data-testid="offerte-location">
+                <MapPin className="w-3.5 h-3.5" />
+                <span>{locationLabel}</span>
+                <span className="text-stone-400">— raggio 15 km</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {quickListCount > 0 && (
@@ -156,6 +205,12 @@ export default function OffertePage() {
         </div>
 
         {/* Info banner */}
+        {!location && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700 flex items-center gap-2" data-testid="no-location-warning">
+            <MapPin className="w-4 h-4 flex-shrink-0" />
+            <span>Imposta la tua posizione dalla <a href="/" className="font-semibold underline">Home</a> per vedere solo le offerte dei supermercati vicini a te</span>
+          </div>
+        )}
         <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-700 flex items-center gap-2" data-testid="add-info-banner">
           <Plus className="w-4 h-4 flex-shrink-0" />
           Tocca un prodotto per aggiungerlo alla tua lista della spesa
@@ -217,9 +272,16 @@ export default function OffertePage() {
               <div className="bg-gradient-to-r from-orange-500 to-red-500 px-5 py-4">
                 <div className="flex items-center gap-3">
                   <Store className="w-5 h-5 text-white" />
-                  <div>
+                  <div className="flex-1">
                     <h3 className="font-bold text-white">{supermercati[storeId]?.nome || storeId}</h3>
-                    <p className="text-white/80 text-sm">{prods.length} offerte attive</p>
+                    <div className="flex items-center gap-3">
+                      <p className="text-white/80 text-sm">{prods.length} offerte attive</p>
+                      {supermercati[storeId]?.distanza_km != null && (
+                        <span className="text-white/70 text-sm flex items-center gap-1">
+                          <MapPin className="w-3 h-3" /> {supermercati[storeId].distanza_km} km
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
