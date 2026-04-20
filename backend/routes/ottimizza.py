@@ -175,12 +175,49 @@ async def get_storico(current_user: dict = Depends(get_current_user)):
 
 @router.patch("/storico/{ricerca_id}/eseguita")
 async def mark_eseguita(ricerca_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.ricerche_storiche.update_one(
+    ricerca = await db.ricerche_storiche.find_one(
+        {"id": ricerca_id, "utente_id": current_user["id"]}, {"_id": 0}
+    )
+    if not ricerca:
+        raise HTTPException(status_code=404, detail="Ricerca non trovata")
+
+    await db.ricerche_storiche.update_one(
         {"id": ricerca_id, "utente_id": current_user["id"]}, {"$set": {"eseguita": True}}
     )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Ricerca non trovata")
-    return {"message": "Ricerca segnata come eseguita"}
+
+    input_lista = ricerca.get("input_lista", [])
+    recorded = 0
+    if input_lista:
+        purchases = []
+        for prod_name in input_lista:
+            norm = normalize_product_name(prod_name)
+            escaped = re_module.escape(norm)
+            product = await db.prodotti.find_one(
+                {"nome_prodotto": {"$regex": escaped, "$options": "i"}}, {"_id": 0}
+            )
+            if product:
+                store = await db.supermercati.find_one(
+                    {"id": product["supermercato_id"]}, {"_id": 0, "nome": 1}
+                )
+                purchases.append({
+                    "id": str(uuid.uuid4()),
+                    "userId": current_user["id"],
+                    "productId": product["id"],
+                    "productName": product["nome_prodotto"],
+                    "canonicalProductName": normalize_product_name(product["nome_prodotto"]).lower(),
+                    "categoryName": product["categoria"],
+                    "brand": product.get("brand"),
+                    "quantity": 1,
+                    "unitPrice": product["prezzo"],
+                    "purchasedAt": datetime.now(timezone.utc).isoformat(),
+                    "supermarketId": product["supermercato_id"],
+                    "supermarketName": store.get("nome", "") if store else "",
+                })
+        if purchases:
+            await db.storico_acquisti.insert_many(purchases)
+            recorded = len(purchases)
+
+    return {"message": "Ricerca segnata come eseguita", "purchases_recorded": recorded}
 
 
 # ============== MATRICE PREZZI ==============

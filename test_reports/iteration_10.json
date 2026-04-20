@@ -1,0 +1,65 @@
+{
+  "summary": "Comprehensive testing of the personalized recommendation/ranking engine for Shopply Offerte page. All backend ranking endpoints work correctly and frontend personalization UI is fully functional. 10/10 backend tests pass and frontend verified with both heavy_buyer (full personalization) and cold-start/blended user flows.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "POST /api/acquisti/seed-mock seeds 3 test users with expected purchase counts (heavy ~30, discount ~18, new=0)",
+    "GET /api/offerte/personalizzate?lat=45.4975&lng=9.3306&debug=true for heavy_buyer returns isColdStart=false, profileSummary contains Latticini in topCategories, scoreBreakdown present",
+    "GET /api/offerte/personalizzate for discount_hunter returns DIFFERENT top-10 offers vs heavy_buyer (rankings personalized)",
+    "GET /api/offerte/personalizzate for new_user returns isColdStart=true with valid offers (cold-start fallback works)",
+    "GET /api/offerte/personalizzate without lat/lng does NOT crash, distanceKm is null for offers",
+    "debug=false strips scoreBreakdown from offers (privacy/lean payload)",
+    "debug=true includes scoreBreakdown",
+    "All offers have offerId, productName, categoryName, offerPrice, supermarketName, score, reasonLabel keys",
+    "POST /api/acquisti records a single purchase and persists to storico_acquisti",
+    "GET /api/acquisti returns purchase history with correct total count for heavy_buyer (30+ items)",
+    "GET /api/offerte/personalizzate without Authorization returns 401/403",
+    "Frontend login with heavy_buyer@test.com works",
+    "Frontend OffertePage shows 'Personalizzato per te' status (data-testid=ranking-status)",
+    "Frontend OffertePage shows 'Consigliati per te' section with 10 top picks (data-testid=recommended-section)",
+    "Frontend reason badges render correctly with labels: 'Comprato spesso', 'Da riordinare', 'Prodotto correlato', 'Ottimo sconto' (268 badges visible for heavy_buyer)",
+    "Frontend score-debug overlay shown when ?debug=true URL param is set (272 elements)",
+    "Frontend store sections sorted by max product score (Lidl Palermo with Fragole top score 95.7 appears first)",
+    "Frontend clicking a recommended pick adds to quick list, shows toast, and reveals 'Lista (n)' button",
+    "Frontend BLENDED mode UI works: after recording 1 purchase for new_user, ranking-status shows 'Ranking misto (personalizzazione parziale)'"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_personalized_ranking_v10.py",
+    "/app/test_reports/pytest/pytest_v10_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ranking_engine.py is well-structured with clear weights, decay model (45-day half-life), and clean separation between cold/blended/personalized paths.",
+    "Cold-start threshold (<3 orders OR <10 items) is reasonable and the blended 50/50 mix smoothly transitions new users.",
+    "Diversify guardrail prevents 3 same-category or 3 same-store consecutive items in top 20 - good UX consideration.",
+    "Minor: routes/raccomandazioni.py /offerte/personalizzate has hardcoded limit 500 for offers - acceptable but document if catalog grows.",
+    "Minor: profile['topCategories'] normalized to 0-100 with max=100, so 'category affinity >=60' threshold for repeat purchase bonus is consistent.",
+    "Frontend OffertePage.js reads ?debug=true from URL ONLY on first mount (no listener) - acceptable but could use react-router useSearchParams.",
+    "Frontend correctly falls back to legacy supermercatiAPI/prodottiAPI.getOfferte() when personalized call fails - good resilience.",
+    "Both backend and frontend exclude MongoDB _id (using {_id: 0} projection). Compliant.",
+    "All interactive UI elements have data-testid attributes. Excellent testability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_personalized_ranking_v10.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 pytest tests passed)",
+    "frontend": "100% (all UI verifications passed)"
+  },
+  "test_credentials": "heavy_buyer@test.com / test1234, discount_hunter@test.com / test1234, new_user@test.com / test1234 (all created via POST /api/acquisti/seed-mock)",
+  "seed_data_creation": "Re-seeded mock purchases via POST /api/acquisti/seed-mock (30 purchases for heavy_buyer Latticini-focused, ~18 for discount_hunter, 0 for new_user)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The personalization engine is production-ready. New backend test file: /app/backend/tests/test_personalized_ranking_v10.py covers seeding, all 3 user profiles (heavy/discount/new), debug toggle, no-geo crash safety, and CRUD. Note: running tests reseeds mock users which clears+rebuilds their storico_acquisti. After running test_record_single_purchase_and_verify, new_user transitions from cold-start to blended mode. The OffertePage.js reads ?debug=true once at mount.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

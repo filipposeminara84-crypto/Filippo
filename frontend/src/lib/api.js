@@ -129,6 +129,15 @@ export const scraperAPI = {
   },
 };
 
+// Raccomandazioni / Personalized Offers
+export const raccomandazioniAPI = {
+  getPersonalizzate: (params) => api.get('/offerte/personalizzate', { params }),
+  recordPurchase: (data) => api.post('/acquisti', data),
+  recordPurchasesBulk: (data) => api.post('/acquisti/bulk', data),
+  getPurchaseHistory: (limit = 100) => api.get('/acquisti', { params: { limit } }),
+  seedMockPurchases: () => api.post('/acquisti/seed-mock'),
+};
+
 // Seed
 export const seedAPI = {
   seed: () => api.post('/seed'),
