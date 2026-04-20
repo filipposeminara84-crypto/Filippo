@@ -50,12 +50,29 @@ export default function HomePage() {
   useEffect(() => {
     loadListeSalvate();
     loadPreferenze();
+    loadQuickList();
     if (!localStorage.getItem('shopply_location')) {
       getUserLocation();
     } else {
       setLocationReady(true);
     }
   }, []);
+
+  // Load products added from Offerte page
+  const loadQuickList = () => {
+    try {
+      const quick = JSON.parse(localStorage.getItem('shopply_quick_list') || '[]');
+      if (quick.length > 0) {
+        setListaSpesa(prev => {
+          const existing = new Set(prev.map(p => p.toLowerCase()));
+          const newItems = quick.filter(p => !existing.has(p.toLowerCase()));
+          return [...prev, ...newItems];
+        });
+        // Clear the quick list after importing
+        localStorage.removeItem('shopply_quick_list');
+      }
+    } catch {}
+  };
 
   const loadListeSalvate = async () => {
     try {
