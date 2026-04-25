@@ -26,6 +26,8 @@ async def seed_database():
         {"id": "despar-pioltello", "nome": "Despar Pioltello", "catena": "Despar", "indirizzo": "Via Garibaldi 15, Pioltello MI", "lat": 45.4941, "lng": 9.3334, "regione": "Lombardia", "citta": "Pioltello", "orari": {"lun-sab": "08:00-20:30", "dom": "09:00-13:00"}, "telefono": "02 9272XXX", "servizi": ["parcheggio"]},
         {"id": "unes-cernusco", "nome": "Unes Cernusco Sul Naviglio", "catena": "Unes", "indirizzo": "Via Torino 50, Cernusco sul Naviglio MI", "lat": 45.5012, "lng": 9.3367, "regione": "Lombardia", "citta": "Cernusco sul Naviglio", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 9274XXX", "servizi": ["parcheggio", "banco_gastronomia", "sushi"]},
         {"id": "iperal-pioltello", "nome": "Iperal Pioltello", "catena": "Iperal", "indirizzo": "Via Monza 88, Pioltello MI", "lat": 45.4990, "lng": 9.3198, "regione": "Lombardia", "citta": "Pioltello", "orari": {"lun-sab": "08:00-21:30", "dom": "09:00-20:00"}, "telefono": "02 9275XXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria", "farmacia"]},
+        {"id": "ilgigante-cernusco", "nome": "Il Gigante Cernusco Sul Naviglio", "catena": "Il Gigante", "indirizzo": "Via Torino 12, Cernusco sul Naviglio MI", "lat": 45.5040, "lng": 9.3290, "regione": "Lombardia", "citta": "Cernusco sul Naviglio", "orari": {"lun-sab": "08:00-21:00", "dom": "09:00-20:00"}, "telefono": "02 9276XXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria"]},
+        {"id": "bennet-carugate", "nome": "Bennet Carugate", "catena": "Bennet", "indirizzo": "Via della Maggiolina, Carugate MI", "lat": 45.5150, "lng": 9.3450, "regione": "Lombardia", "citta": "Carugate", "orari": {"lun-sab": "08:30-21:00", "dom": "09:00-20:00"}, "telefono": "02 9277XXX", "servizi": ["parcheggio", "banco_gastronomia", "panetteria", "farmacia"]},
         # === LOMBARDIA - Gallarate (Varese) ===
         {"id": "esselunga-gallarate-pegoraro", "nome": "Esselunga Gallarate Via Pegoraro", "catena": "Esselunga", "indirizzo": "Via Pegoraro 2, Gallarate VA", "lat": 45.6603, "lng": 8.7917, "regione": "Lombardia", "citta": "Gallarate", "orari": {"lun-sab": "07:30-22:00", "dom": "08:00-21:00"}, "telefono": "0331 77XXXX", "servizi": ["parcheggio", "banco_gastronomia", "bar"]},
         {"id": "esselunga-gallarate-borri", "nome": "Esselunga Gallarate Viale Borri", "catena": "Esselunga", "indirizzo": "Viale Borri 165, Gallarate VA", "lat": 45.6540, "lng": 8.7810, "regione": "Lombardia", "citta": "Gallarate", "orari": {"lun-sab": "07:30-22:00", "dom": "08:00-21:00"}, "telefono": "0331 78XXXX", "servizi": ["parcheggio", "banco_gastronomia", "farmacia"]},
@@ -72,6 +74,7 @@ async def seed_database():
         "eurospin-pioltello": 0.80, "carrefour-segrate": 0.95, "penny-pioltello": 0.82,
         "md-segrate": 0.78, "conad-pioltello": 0.98, "aldi-segrate": 0.83,
         "despar-pioltello": 1.02, "unes-cernusco": 0.97, "iperal-pioltello": 1.03,
+        "ilgigante-cernusco": 0.96, "bennet-carugate": 0.99,
         "esselunga-gallarate-pegoraro": 1.06, "esselunga-gallarate-borri": 1.05,
         "conad-gallarate": 0.97, "coop-gallarate": 1.0, "carrefour-gallarate": 0.96,
         "lidl-gallarate": 0.84, "iperal-gallarate": 1.02, "ilgigante-gallarate": 0.99,
