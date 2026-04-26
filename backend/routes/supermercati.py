@@ -198,7 +198,7 @@ async def _background_scrape_offers(stores: list):
 
         # Record scraping event
         await db.scraping_log.insert_one({
-            "id": str(uuid.uuid4()) if 'uuid' in dir() else "bg-scrape",
+            "id": str(uuid.uuid4()),
             "data": datetime.now(timezone.utc).isoformat(),
             "prodotti_trovati": len(all_scraped),
             "tipo": "background_discovery",

@@ -144,7 +144,15 @@ export default function OffertePage() {
                 _breakdown: o.scoreBreakdown || null,
               });
               if (!supMap[sid]) {
-                supMap[sid] = { id: sid, nome: o.supermarketName, distanza_km: o.distanceKm };
+                supMap[sid] = {
+                  id: sid,
+                  nome: o.supermarketName,
+                  distanza_km: o.distanceKm,
+                  indirizzo: allStoresForMap[sid]?.indirizzo || '',
+                  lat: allStoresForMap[sid]?.lat,
+                  lng: allStoresForMap[sid]?.lng,
+                  catena: allStoresForMap[sid]?.catena || '',
+                };
               }
             });
             setOfferte(byStore);
