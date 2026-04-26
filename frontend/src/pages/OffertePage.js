@@ -91,6 +91,15 @@ export default function OffertePage() {
   const loadData = async (loc) => {
     setLoading(true);
     try {
+      // Step 1: If location is set, discover real stores first
+      if (loc) {
+        try {
+          await supermercatiAPI.discover(loc.lat, loc.lng, 15);
+        } catch (err) {
+          console.log('Discovery skipped:', err.message);
+        }
+      }
+
       const token = localStorage.getItem('shopply_token');
       let personalized = false;
 

@@ -21,25 +21,35 @@ async def get_offerte_personalizzate(
     debug: bool = False,
     current_user: dict = Depends(get_current_user),
 ):
-    offerte_db = await db.prodotti.find(
-        {"in_offerta": True}, {"_id": 0}
-    ).limit(500).to_list(500)
-
-    if not offerte_db:
-        return {"offers": [], "meta": {"isColdStart": True, "totalOffers": 0}}
-
-    supermercati = await db.supermercati.find({}, {"_id": 0}).to_list(200)
+    supermercati = await db.supermercati.find({}, {"_id": 0}).to_list(2000)
     store_map = {s["id"]: s for s in supermercati}
 
     nearby_ids = None
     store_dist: dict[str, float] = {}
     if lat is not None and lng is not None:
-        nearby_ids = set()
+        all_nearby = []
         for s in supermercati:
             d = haversine_distance(lat, lng, s["lat"], s["lng"])
             if d <= raggio_km:
                 store_dist[s["id"]] = round(d, 1)
-                nearby_ids.add(s["id"])
+                all_nearby.append(s)
+
+        osm_nearby = [s for s in all_nearby if s.get("fonte") == "osm"]
+        if osm_nearby:
+            nearby_ids = set(s["id"] for s in osm_nearby)
+        else:
+            nearby_ids = set(s["id"] for s in all_nearby)
+
+        store_dist = {k: v for k, v in store_dist.items() if k in nearby_ids}
+
+    # Query offers filtered by nearby stores for efficiency
+    query = {"in_offerta": True}
+    if nearby_ids:
+        query["supermercato_id"] = {"$in": list(nearby_ids)}
+    offerte_db = await db.prodotti.find(query, {"_id": 0}).limit(2000).to_list(2000)
+
+    if not offerte_db:
+        return {"offers": [], "meta": {"isColdStart": True, "totalOffers": 0}}
 
     offers = []
     for prod in offerte_db:

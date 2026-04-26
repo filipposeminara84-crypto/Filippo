@@ -1,11 +1,17 @@
 """Supermarket and product routes."""
 import math
+import asyncio
+import logging
+from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from models import Supermercato, Prodotto, Preferenze
 from database import db
-from dependencies import get_current_user
+from dependencies import get_current_user, haversine_distance
+from store_discovery import discover_stores_overpass
+from catalog_generator import generate_base_catalog, import_scraped_offers
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["supermercati-prodotti"])
 
 
@@ -29,18 +35,146 @@ async def get_supermercati():
 
 @router.get("/supermercati/nearby")
 async def get_supermercati_nearby(lat: float, lng: float, raggio_km: float = 10):
-    supermercati = await db.supermercati.find({}, {"_id": 0}).to_list(200)
+    supermercati = await db.supermercati.find({}, {"_id": 0}).to_list(2000)
+
     risultati = []
     for sup in supermercati:
-        dist = math.sqrt(
-            ((sup["lat"] - lat) * 111.32) ** 2 +
-            ((sup["lng"] - lng) * 111.32 * math.cos(math.radians(lat))) ** 2
-        )
+        dist = haversine_distance(lat, lng, sup["lat"], sup["lng"])
         if dist <= raggio_km:
             sup["distanza_km"] = round(dist, 1)
             risultati.append(sup)
+
+    # If we have OSM (real) stores in the area, use only those
+    osm_in_area = [s for s in risultati if s.get("fonte") == "osm"]
+    if osm_in_area:
+        risultati = osm_in_area
+
     risultati.sort(key=lambda x: x["distanza_km"])
     return risultati
+
+
+@router.post("/supermercati/discover")
+async def discover_supermercati(
+    lat: float, lng: float, raggio_km: float = 15,
+    background_tasks: BackgroundTasks = None,
+):
+    """Discover real supermarkets from OpenStreetMap and store them in DB."""
+    from pymongo import UpdateOne
+
+    # Check cache: if we already discovered stores near this point recently
+    cache_key = f"{round(lat, 2)}_{round(lng, 2)}"
+    cache = await db.discovery_cache.find_one({"key": cache_key}, {"_id": 0})
+    if cache:
+        cached_at = cache.get("timestamp", "")
+        try:
+            cached_dt = datetime.fromisoformat(cached_at.replace("Z", "+00:00"))
+            if (datetime.now(timezone.utc) - cached_dt).days < 7:
+                # Return cached stores
+                stores = await db.supermercati.find(
+                    {"fonte": "osm"}, {"_id": 0}
+                ).to_list(2000)
+                nearby = []
+                for s in stores:
+                    d = haversine_distance(lat, lng, s["lat"], s["lng"])
+                    if d <= raggio_km:
+                        s["distanza_km"] = round(d, 1)
+                        nearby.append(s)
+                nearby.sort(key=lambda x: x["distanza_km"])
+
+                # Ensure catalog exists for these stores
+                try:
+                    await generate_base_catalog(db, nearby)
+                except Exception:
+                    pass
+
+                return {
+                    "source": "cache",
+                    "stores": len(nearby),
+                    "supermercati": nearby,
+                }
+        except Exception:
+            pass
+
+    # Discover from Overpass API
+    osm_stores = await discover_stores_overpass(lat, lng, int(raggio_km * 1000))
+    if not osm_stores:
+        return {"source": "overpass", "stores": 0, "supermercati": [], "error": "Nessun risultato da OpenStreetMap"}
+
+    # Upsert discovered stores in DB
+    ops = []
+    for store in osm_stores:
+        ops.append(UpdateOne(
+            {"id": store["id"]},
+            {"$set": store},
+            upsert=True,
+        ))
+    if ops:
+        await db.supermercati.bulk_write(ops)
+
+    # Update cache
+    await db.discovery_cache.update_one(
+        {"key": cache_key},
+        {"$set": {"key": cache_key, "timestamp": datetime.now(timezone.utc).isoformat(), "lat": lat, "lng": lng, "count": len(osm_stores)}},
+        upsert=True,
+    )
+
+    # Generate base catalog for new stores SYNCHRONOUSLY (fast)
+    try:
+        n = await generate_base_catalog(db, osm_stores)
+        logger.info(f"[Discover] Generated {n} base products for new stores")
+    except Exception as e:
+        logger.error(f"[Discover] Catalog generation error: {e}")
+
+    # Start DoveConviene scraping in BACKGROUND (slow)
+    if background_tasks:
+        background_tasks.add_task(_background_scrape_offers, osm_stores)
+
+    # Calculate distances and return
+    result = []
+    for s in osm_stores:
+        d = haversine_distance(lat, lng, s["lat"], s["lng"])
+        if d <= raggio_km:
+            s["distanza_km"] = round(d, 1)
+            result.append(s)
+    result.sort(key=lambda x: x["distanza_km"])
+
+    # Index for performance
+    await db.supermercati.create_index("id")
+    await db.supermercati.create_index("fonte")
+    await db.prodotti.create_index("supermercato_id")
+
+    return {
+        "source": "overpass",
+        "stores": len(result),
+        "chains": sorted(set(s["catena"] for s in result)),
+        "supermercati": result,
+    }
+
+
+async def _background_scrape_offers(stores: list):
+    """Background task: scrape DoveConviene for real offers."""
+    try:
+        from scraper import scrape_doveconviene
+        priority_terms = [
+            "latte", "pasta", "acqua", "pollo", "olio-extravergine",
+            "biscotti", "detersivo", "yogurt", "mozzarella", "birra",
+            "tonno", "caffe", "pane", "riso", "coca-cola",
+        ]
+        all_scraped = []
+        for term in priority_terms:
+            try:
+                results = await scrape_doveconviene(term)
+                all_scraped.extend(results)
+                logger.info(f"[BG] DoveConviene '{term}': {len(results)} results")
+            except Exception as e:
+                logger.warning(f"[BG] DoveConviene '{term}' failed: {e}")
+            await asyncio.sleep(2)
+
+        if all_scraped:
+            stats = await import_scraped_offers(db, all_scraped, stores)
+            logger.info(f"[BG] Imported scraped offers: {stats}")
+    except Exception as e:
+        logger.error(f"[BG] Scraping error: {e}")
 
 @router.get("/copertura")
 async def get_copertura():

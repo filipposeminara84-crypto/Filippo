@@ -12,3 +12,4 @@
 - All users created with JWT auth flow
 - Login: POST /api/auth/login with { email, password }
 - Mock purchases seeded via: POST /api/acquisti/seed-mock
+- Real stores discovered via: POST /api/supermercati/discover?lat=X&lng=Y
