@@ -42,6 +42,7 @@ export const supermercatiAPI = {
   nearby: (lat, lng, raggio_km = 10) => api.get('/supermercati/nearby', { params: { lat, lng, raggio_km } }),
   copertura: () => api.get('/copertura'),
   discover: (lat, lng, raggio_km = 15) => api.post('/supermercati/discover', null, { params: { lat, lng, raggio_km } }),
+  scrapeOfferte: (lat, lng) => api.post('/supermercati/scrape-offerte', null, { params: { lat, lng, raggio_km: 15 } }),
 };
 
 // Prodotti

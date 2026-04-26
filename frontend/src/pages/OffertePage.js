@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Tag, TrendingDown, Store, RefreshCw, Loader2, Sparkles, Plus, Check, ShoppingCart, MapPin, Repeat, Star, Zap, Heart } from 'lucide-react';
+import { Tag, TrendingDown, Store, RefreshCw, Loader2, Sparkles, Plus, Check, ShoppingCart, MapPin, Repeat, Star, Zap, Heart, Map, List } from 'lucide-react';
 import { prodottiAPI, supermercatiAPI, prezziAPI, raccomandazioniAPI } from '../lib/api';
 import { formatPrice } from '../lib/utils';
 import Layout from '../components/Layout';
 import ProductTooltip from '../components/ProductTooltip';
+import StoreMap from '../components/StoreMap';
 
 const LISTA_KEY = 'shopply_quick_list';
 function getQuickList() {
@@ -65,6 +66,9 @@ export default function OffertePage() {
   const [rankingMeta, setRankingMeta] = useState(null);
   const [isPersonalized, setIsPersonalized] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [allStoresForMap, setAllStoresForMap] = useState({});
+  const storeRefs = useRef({});
 
   useEffect(() => {
     const existing = getQuickList();
@@ -94,7 +98,12 @@ export default function OffertePage() {
       // Step 1: If location is set, discover real stores first
       if (loc) {
         try {
-          await supermercatiAPI.discover(loc.lat, loc.lng, 15);
+          const discoverRes = await supermercatiAPI.discover(loc.lat, loc.lng, 15);
+          if (discoverRes.data?.supermercati) {
+            const mapStores = {};
+            discoverRes.data.supermercati.forEach(s => { mapStores[s.id] = s; });
+            setAllStoresForMap(mapStores);
+          }
         } catch (err) {
           console.log('Discovery skipped:', err.message);
         }
@@ -305,6 +314,20 @@ export default function OffertePage() {
               {aggiornando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               Aggiorna
             </button>
+            {location && Object.keys(allStoresForMap).length > 0 && (
+              <button
+                onClick={() => setShowMap(v => !v)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                  showMap
+                    ? 'bg-stone-800 text-white'
+                    : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'
+                }`}
+                data-testid="toggle-map-btn"
+              >
+                {showMap ? <List className="w-4 h-4" /> : <Map className="w-4 h-4" />}
+                {showMap ? 'Lista' : 'Mappa'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -327,6 +350,25 @@ export default function OffertePage() {
               <span className="ml-2 text-orange-500">({ultimoAggiornamento.nuove_offerte} nuove offerte)</span>
             )}
           </div>
+        )}
+
+        {/* Interactive Map */}
+        {showMap && location && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+            <StoreMap
+              stores={allStoresForMap}
+              userLat={location.lat}
+              userLng={location.lng}
+              offerte={offerte}
+              onStoreClick={(storeId) => {
+                setShowMap(false);
+                setTimeout(() => {
+                  const el = storeRefs.current[storeId];
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 200);
+              }}
+            />
+          </motion.div>
         )}
 
         {/* Consigliati Per Te section */}
@@ -419,6 +461,7 @@ export default function OffertePage() {
           sortedStoreEntries.map(([storeId, prods], idx) => (
             <motion.div
               key={storeId}
+              ref={el => { storeRefs.current[storeId] = el; }}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.05 }}
@@ -429,12 +472,15 @@ export default function OffertePage() {
                   <Store className="w-5 h-5 text-white" />
                   <div className="flex-1">
                     <h3 className="font-bold text-white">{supermercati[storeId]?.nome || storeId}</h3>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <p className="text-white/80 text-sm">{prods.length} offerte attive</p>
                       {supermercati[storeId]?.distanza_km != null && (
                         <span className="text-white/70 text-sm flex items-center gap-1">
                           <MapPin className="w-3 h-3" /> {supermercati[storeId].distanza_km} km
                         </span>
+                      )}
+                      {supermercati[storeId]?.indirizzo && (
+                        <span className="text-white/60 text-xs">{supermercati[storeId].indirizzo}</span>
                       )}
                     </div>
                   </div>

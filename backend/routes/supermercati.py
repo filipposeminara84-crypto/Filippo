@@ -1,5 +1,6 @@
 """Supermarket and product routes."""
 import math
+import uuid
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -152,29 +153,82 @@ async def discover_supermercati(
 
 
 async def _background_scrape_offers(stores: list):
-    """Background task: scrape DoveConviene for real offers."""
+    """Background task: scrape DoveConviene for real offers — full category coverage."""
     try:
         from scraper import scrape_doveconviene
-        priority_terms = [
-            "latte", "pasta", "acqua", "pollo", "olio-extravergine",
-            "biscotti", "detersivo", "yogurt", "mozzarella", "birra",
-            "tonno", "caffe", "pane", "riso", "coca-cola",
+        # Extended list: 40+ terms covering all major grocery categories
+        scrape_terms = [
+            # Latticini
+            "latte", "yogurt", "mozzarella", "parmigiano", "burro", "ricotta", "gorgonzola", "philadelphia",
+            # Pane e Cereali
+            "pasta", "riso", "farina", "pane", "cereali", "crackers", "fette-biscottate",
+            # Frutta e Verdura
+            "mele", "banane", "arance", "pomodori", "insalata", "patate", "carote",
+            # Carne e Pesce
+            "pollo", "macinato", "prosciutto", "salmone", "tonno", "bresaola",
+            # Bevande
+            "acqua", "coca-cola", "succo", "birra", "caffe", "fanta",
+            # Snack e Dolci
+            "biscotti", "nutella", "cioccolato", "patatine", "gelato",
+            # Condimenti e Salse
+            "olio-extravergine", "passata-pomodoro", "pesto", "maionese",
+            # Surgelati
+            "pizza-surgelata", "minestrone", "patate-fritte",
+            # Igiene e Casa
+            "carta-igienica", "detersivo", "ammorbidente", "scottex",
+            # Igiene Personale
+            "shampoo", "bagnoschiuma", "dentifricio", "deodorante",
+            # Baby e Pet
+            "pannolini", "crocchette-cane",
         ]
         all_scraped = []
-        for term in priority_terms:
+        for term in scrape_terms:
             try:
                 results = await scrape_doveconviene(term)
                 all_scraped.extend(results)
-                logger.info(f"[BG] DoveConviene '{term}': {len(results)} results")
+                if results:
+                    logger.info(f"[BG] DoveConviene '{term}': {len(results)} results")
             except Exception as e:
                 logger.warning(f"[BG] DoveConviene '{term}' failed: {e}")
-            await asyncio.sleep(2)
+            await asyncio.sleep(1.5)
 
         if all_scraped:
             stats = await import_scraped_offers(db, all_scraped, stores)
             logger.info(f"[BG] Imported scraped offers: {stats}")
+
+        # Record scraping event
+        await db.scraping_log.insert_one({
+            "id": str(uuid.uuid4()) if 'uuid' in dir() else "bg-scrape",
+            "data": datetime.now(timezone.utc).isoformat(),
+            "prodotti_trovati": len(all_scraped),
+            "tipo": "background_discovery",
+            "fonti": ["doveconviene"],
+        })
     except Exception as e:
         logger.error(f"[BG] Scraping error: {e}")
+
+
+@router.post("/supermercati/scrape-offerte")
+async def trigger_scrape_offerte(
+    lat: float, lng: float, raggio_km: float = 15,
+    background_tasks: BackgroundTasks = None,
+):
+    """Manually trigger DoveConviene scraping for stores near a location."""
+    stores = await db.supermercati.find({"fonte": "osm"}, {"_id": 0}).to_list(2000)
+    nearby = [s for s in stores if haversine_distance(lat, lng, s["lat"], s["lng"]) <= raggio_km]
+
+    if not nearby:
+        return {"message": "Nessun negozio scoperto in zona. Esegui prima /api/supermercati/discover"}
+
+    if background_tasks:
+        background_tasks.add_task(_background_scrape_offers, nearby)
+
+    chains = sorted(set(s["catena"] for s in nearby))
+    return {
+        "message": f"Scraping avviato per {len(nearby)} negozi ({len(chains)} catene)",
+        "stores": len(nearby),
+        "chains": chains,
+    }
 
 @router.get("/copertura")
 async def get_copertura():
