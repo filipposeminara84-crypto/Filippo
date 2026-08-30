@@ -88,6 +88,19 @@ async def discover_supermercati(
                 except Exception:
                     pass
 
+                # Refresh real offers if last scrape is stale (>3 days)
+                if background_tasks and nearby:
+                    last_scrape = await db.scraping_log.find_one({}, {"_id": 0}, sort=[("data", -1)])
+                    stale = True
+                    if last_scrape:
+                        try:
+                            last_dt = datetime.fromisoformat(last_scrape["data"].replace("Z", "+00:00"))
+                            stale = (datetime.now(timezone.utc) - last_dt).days >= 3
+                        except Exception:
+                            pass
+                    if stale:
+                        background_tasks.add_task(_background_scrape_offers, nearby)
+
                 return {
                     "source": "cache",
                     "stores": len(nearby),
@@ -99,6 +112,17 @@ async def discover_supermercati(
     # Discover from Overpass API
     osm_stores = await discover_stores_overpass(lat, lng, int(raggio_km * 1000))
     if not osm_stores:
+        # Overpass unreachable: fall back to previously discovered stores in DB
+        stores = await db.supermercati.find({"fonte": "osm"}, {"_id": 0}).to_list(2000)
+        nearby = []
+        for s in stores:
+            d = haversine_distance(lat, lng, s["lat"], s["lng"])
+            if d <= raggio_km:
+                s["distanza_km"] = round(d, 1)
+                nearby.append(s)
+        nearby.sort(key=lambda x: x["distanza_km"])
+        if nearby:
+            return {"source": "db_fallback", "stores": len(nearby), "supermercati": nearby}
         return {"source": "overpass", "stores": 0, "supermercati": [], "error": "Nessun risultato da OpenStreetMap"}
 
     # Upsert discovered stores in DB

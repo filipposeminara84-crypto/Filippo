@@ -77,6 +77,7 @@ async def get_offerte_personalizzate(
             "supermarketName": store.get("nome", sid),
             "userDistanceKm": dist_km,
             "inStock": True,
+            "fonte": prod.get("fonte_prezzo", ""),
         })
 
     history = await db.storico_acquisti.find(
@@ -102,6 +103,7 @@ async def get_offerte_personalizzate(
             "distanceKm": o.get("userDistanceKm"),
             "score": o.get("_score", 0),
             "reasonLabel": o.get("_reasonLabel", ""),
+            "fonte": o.get("fonte", ""),
         }
         if debug:
             item["scoreBreakdown"] = o.get("_breakdown", {})

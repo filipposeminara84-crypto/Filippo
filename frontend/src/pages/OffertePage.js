@@ -142,6 +142,7 @@ export default function OffertePage() {
                 _score: o.score,
                 _reasonLabel: o.reasonLabel,
                 _breakdown: o.scoreBreakdown || null,
+                _fonte: o.fonte || '',
               });
               if (!supMap[sid]) {
                 supMap[sid] = {
@@ -530,6 +531,11 @@ export default function OffertePage() {
                             {prod.sconto_percentuale && (
                               <span className="inline-flex items-center gap-1 text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">
                                 <TrendingDown className="w-3 h-3" />-{prod.sconto_percentuale}%
+                              </span>
+                            )}
+                            {prod._fonte === 'doveconviene' && (
+                              <span className="block text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full mt-0.5 text-center" data-testid="fonte-volantino-badge">
+                                Volantino
                               </span>
                             )}
                           </div>

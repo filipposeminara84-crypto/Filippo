@@ -1,12 +1,12 @@
 """Generate base product catalog for discovered stores and import real scraped offers."""
 import re
-import uuid
-import random
 import logging
 from datetime import datetime, timezone
 from scraper import _map_chain, SEARCH_TERMS
 
 logger = logging.getLogger(__name__)
+
+TERM_TO_CATEGORY = {term: cat for cat, terms in SEARCH_TERMS.items() for term in terms}
 
 BASE_CATALOG = {
     "Latticini": [
@@ -94,14 +94,10 @@ async def generate_base_catalog(db, stores: list) -> int:
         factor = CHAIN_PRICE_FACTOR.get(store["catena"], 1.0)
         for categoria, items in BASE_CATALOG.items():
             for nome, brand, formato, prezzo_base in items:
-                prezzo = round(prezzo_base * factor * random.uniform(0.96, 1.04), 2)
-                in_offerta = random.random() < 0.10
+                prezzo = round(prezzo_base * factor, 2)
+                in_offerta = False
                 sconto = None
                 prezzo_prec = None
-                if in_offerta:
-                    sconto = random.choice([10, 15, 20, 25, 30])
-                    prezzo_prec = prezzo
-                    prezzo = round(prezzo * (1 - sconto / 100), 2)
 
                 prod_slug = re.sub(r'[^a-z0-9]+', '-', nome.lower())[:40]
                 products.append({
@@ -152,16 +148,20 @@ async def import_scraped_offers(db, scraped_data: list, stores: list) -> dict:
         if not matching:
             continue
 
-        nome = item["nome_prodotto"]
-        prod_slug = re.sub(r'[^a-z0-9]+', '-', nome.lower())[:40]
+        nome_raw = item["nome_prodotto"]
+        prod_slug = re.sub(r'[^a-z0-9]+', '-', nome_raw.lower())[:40]
+        brand, nome = "", nome_raw
+        if " - " in nome_raw:
+            brand, nome = nome_raw.split(" - ", 1)
+        categoria = TERM_TO_CATEGORY.get(item.get("search_term", ""), "Altro")
 
         for store in matching:
             prod_id = f"dc-{prod_slug}-{store['id']}"
             doc = {
                 "id": prod_id,
                 "nome_prodotto": nome,
-                "categoria": item.get("search_term", "Altro"),
-                "brand": "",
+                "categoria": categoria,
+                "brand": brand,
                 "formato": "",
                 "supermercato_id": store["id"],
                 "prezzo": item["prezzo"],

@@ -7,10 +7,16 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+OVERPASS_MIRRORS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+]
 
 KNOWN_CHAINS = {
-    "esselunga": "Esselunga", "la esse": "Esselunga",
+    "esselunga": "Esselunga", "la esse": "Esselunga", "laesse": "Esselunga",
     "coop": "Coop", "ipercoop": "Ipercoop", "incoop": "Coop",
     "conad": "Conad", "conad city": "Conad", "conad superstore": "Conad", "spazio conad": "Conad",
     "carrefour": "Carrefour", "carrefour market": "Carrefour", "carrefour express": "Carrefour",
@@ -37,31 +43,49 @@ KNOWN_CHAINS = {
     "naturasì": "NaturaSi",
     "naturasi": "NaturaSi",
     "in's": "iN's", "in's mercato": "iN's", "ins": "iN's",
-    "dpiu": "DPiu", "dpiù": "DPiu", "d+": "DPiu",
+    "dpiu": "DPiu", "dpiù": "DPiu", "d+": "DPiu", "d più": "DPiu", "d piu": "DPiu",
     "pewex": "Pewex",
     "iperal": "Iperal",
     "to.market": "to.market",
     "tigre": "Tigre",
     "dok": "Dok",
-    "tuodi'": "Tuodi",
+    "tuodi'": "Tuodi", "tuodì": "Tuodi", "tuodi": "Tuodi",
     "risparmio casa": "Risparmio Casa",
     "ekom": "Ekom",
     "ali": "Ali",
     "alì": "Ali",
+    "aliper": "Ali",
     "prix": "Prix",
 }
 
+_CHAIN_KEYS = sorted(KNOWN_CHAINS.keys(), key=len, reverse=True)
+
+NON_SUPERMARKET_PATTERNS = [
+    "tigotà", "tigota", "acqua & sapone", "acqua e sapone", "caddy",
+    "cash & carry", "cash and carry", "cash&carry", "c+c",
+    "centro commerciale", "centro servizi", "home & fashion",
+]
+
+
+def _is_excluded(name: str, brand: str = "", operator: str = "") -> bool:
+    """True if the POI is not a real grocery supermarket (drugstore, mall, wholesale)."""
+    text = " ".join(filter(None, [name, brand, operator])).lower()
+    return any(p in text for p in NON_SUPERMARKET_PATTERNS)
+
+
+def _word_match(key: str, text: str) -> bool:
+    return re.search(rf"(?<![a-z0-9]){re.escape(key)}(?![a-z0-9])", text) is not None
+
 
 def _identify_chain(name: str, brand: str = None, operator: str = None) -> str:
-    for source in [brand, operator, name]:
-        if not source:
-            continue
-        lower = source.lower().strip()
+    sources = [s.lower().strip() for s in [brand, operator, name] if s]
+    for lower in sources:
         if lower in KNOWN_CHAINS:
             return KNOWN_CHAINS[lower]
-        for key, val in KNOWN_CHAINS.items():
-            if key in lower:
-                return val
+    for lower in sources:
+        for key in _CHAIN_KEYS:
+            if _word_match(key, lower):
+                return KNOWN_CHAINS[key]
     return name.strip() if name else "Altro"
 
 
@@ -70,24 +94,40 @@ def _make_store_id(name: str, osm_id: int) -> str:
     return f"osm-{slug}-{osm_id}"
 
 
+async def _query_overpass(query: str, per_mirror_timeout: float = 12.0, total_budget_s: float = 30.0) -> dict | None:
+    """Try each Overpass mirror until one responds, within a total time budget."""
+    import time
+    encoded = urllib.parse.quote(query)
+    start = time.monotonic()
+    for base in OVERPASS_MIRRORS:
+        if time.monotonic() - start > total_budget_s:
+            logger.warning("[Overpass] Total time budget exhausted")
+            break
+        url = f"{base}?data={encoded}"
+        try:
+            async with httpx.AsyncClient(timeout=per_mirror_timeout) as client:
+                resp = await client.get(url, headers={"User-Agent": "Shopply/1.0"})
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if "elements" in data:
+                        logger.info(f"[Overpass] Success via {base}")
+                        return data
+                logger.warning(f"[Overpass] {base} -> HTTP {resp.status_code}")
+        except Exception as e:
+            logger.warning(f"[Overpass] {base} failed: {type(e).__name__}")
+    return None
+
+
 async def discover_stores_overpass(lat: float, lng: float, radius_m: int = 15000) -> list[dict]:
     query = (
-        f'[out:json][timeout:30];'
+        f'[out:json][timeout:20];'
         f'(node["shop"="supermarket"](around:{radius_m},{lat},{lng});'
         f'way["shop"="supermarket"](around:{radius_m},{lat},{lng}););'
         f'out center body;'
     )
-    url = f"{OVERPASS_URL}?data={urllib.parse.quote(query)}"
-
-    try:
-        async with httpx.AsyncClient(timeout=40.0) as client:
-            resp = await client.get(url, headers={"User-Agent": "Shopply/1.0"})
-            if resp.status_code != 200:
-                logger.error(f"[Overpass] HTTP {resp.status_code}")
-                return []
-            data = resp.json()
-    except Exception as e:
-        logger.error(f"[Overpass] Error: {e}")
+    data = await _query_overpass(query)
+    if data is None:
+        logger.error("[Overpass] All mirrors failed")
         return []
 
     stores = []
@@ -97,6 +137,12 @@ async def discover_stores_overpass(lat: float, lng: float, radius_m: int = 15000
         tags = el.get("tags", {})
         name = tags.get("name", "").strip()
         if not name:
+            continue
+
+        brand = tags.get("brand", "")
+        operator = tags.get("operator", "")
+
+        if _is_excluded(name, brand, operator):
             continue
 
         if el["type"] == "node":
@@ -114,8 +160,6 @@ async def discover_stores_overpass(lat: float, lng: float, radius_m: int = 15000
             continue
         seen_ids.add(store_id)
 
-        brand = tags.get("brand", "")
-        operator = tags.get("operator", "")
         chain = _identify_chain(name, brand, operator)
 
         addr_parts = []

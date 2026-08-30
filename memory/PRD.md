@@ -5,6 +5,16 @@ App web per ottimizzare la spesa al supermercato tra piu catene, copertura tutta
 
 ## Funzionalita Implementate
 
+### v4.4.0 - Audit Accuratezza Dati (30 Agosto 2026)
+- **Solo negozi reali**: rimossi 35 seed fittizi + 8 non-supermercati (Tigotà, Cash&Carry, centri commerciali); DB = 100% negozi OSM reali
+- **Catene corrette**: matching word-boundary (fix "SK Alimentari"→Ali, "Iperal Milano"→Iper, LaEsse→Esselunga); 23 riclassificazioni
+- **Solo offerte reali**: eliminate 5.299 offerte sintetiche random (prezzi originali ripristinati); ~19k offerte tutte da volantini DoveConviene
+- **Prodotti DC arricchiti**: 47.644 fix categoria (search_term→categoria standard) + brand estratto da "Brand - Prodotto"
+- **Overpass resiliente**: 5 mirror con fallback + budget 30s; se tutti down → fallback a negozi OSM già in DB
+- **Freshness**: re-scraping automatico in background se ultimo scrape >3 giorni (su cache-hit discovery)
+- **UI**: badge "Volantino" sulle offerte da fonte reale doveconviene
+- Nota: prezzi non in offerta del catalogo base restano indicativi (fonte_prezzo=catalogo_base); /api/seed ricreerebbe store fittizi (non usare)
+
 ### v4.3.0 - Google Sign-in (Emergent Auth) (30 Agosto 2026)
 - **Google OAuth** via Emergent Auth: pulsante "Accedi con Google" sulla pagina login
 - Flusso: login page → auth.emergentagent.com → callback con session_id → exchange per session
@@ -40,6 +50,7 @@ App web per ottimizzare la spesa al supermercato tra piu catene, copertura tutta
 
 ## Backlog
 ### P1: Missioni Giornaliere/Settimanali (gamification)
-### P2: Scraping scheduling automatico (cron-style)
+### P2: Scraping scheduling automatico (cron-style) — parziale: re-scrape se >3gg su discovery
 ### P2: Espansione nazionale Q2 2026
 ### P3: Assistenti Vocali
+### Idea: filtro mappa per catena; foto profilo Google in navbar
