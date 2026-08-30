@@ -1,6 +1,7 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import AuthCallback from './components/AuthCallback';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 import RisultatiPage from './pages/RisultatiPage';
@@ -15,7 +16,7 @@ import './App.css';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-stone-50">
@@ -23,13 +24,13 @@ function PrivateRoute({ children }) {
       </div>
     );
   }
-  
+
   return user ? children : <Navigate to="/login" />;
 }
 
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-stone-50">
@@ -37,11 +38,19 @@ function PublicRoute({ children }) {
       </div>
     );
   }
-  
+
   return user ? <Navigate to="/" /> : children;
 }
 
-function AppRoutes() {
+// REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+function AppRouter() {
+  const location = useLocation();
+
+  // Detect session_id synchronously during render (prevents race conditions)
+  if (location.hash?.includes('session_id=')) {
+    return <AuthCallback />;
+  }
+
   return (
     <Routes>
       <Route path="/login" element={
@@ -94,7 +103,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <AppRouter />
         <InstallPWAPrompt />
       </AuthProvider>
     </BrowserRouter>

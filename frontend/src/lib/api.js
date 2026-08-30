@@ -16,7 +16,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !window.location.pathname.includes('/login')) {
       localStorage.removeItem('shopply_token');
       localStorage.removeItem('shopply_user');
       window.location.href = '/login';
@@ -29,10 +29,12 @@ api.interceptors.response.use(
 export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
-  getMe: () => api.get('/auth/me'),
+  getMe: () => api.get('/auth/me', { withCredentials: true }),
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token, new_password) => api.post('/auth/reset-password', { token, new_password }),
   verifyResetToken: (token) => api.get('/auth/verify-reset-token', { params: { token } }),
+  googleSession: (session_id) => api.post('/auth/google/session', { session_id }, { withCredentials: true }),
+  googleLogout: () => api.post('/auth/google/logout', null, { withCredentials: true }),
 };
 
 // Supermercati

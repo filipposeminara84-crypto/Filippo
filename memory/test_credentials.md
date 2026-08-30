@@ -1,6 +1,6 @@
 # Shopply Test Credentials
 
-## Test Users (created via POST /api/acquisti/seed-mock)
+## Test Users (JWT Auth - created via POST /api/acquisti/seed-mock)
 
 | Role | Email | Password | Profile |
 |------|-------|----------|---------|
@@ -8,8 +8,12 @@
 | Discount Hunter | discount_hunter@test.com | test1234 | Lidl/Eurospin/MD, discount-oriented |
 | New User (Cold Start) | new_user@test.com | test1234 | No purchase history |
 
+## Google Auth
+- Google Sign-in via Emergent Auth: click "Accedi con Google" on /login page
+- Redirects to auth.emergentagent.com → back to app with session
+- Google users auto-created in utenti collection with auth_provider: "google"
+
 ## Notes
-- All users created with JWT auth flow
 - Login: POST /api/auth/login with { email, password }
 - Mock purchases seeded via: POST /api/acquisti/seed-mock
 - Real stores discovered via: POST /api/supermercati/discover?lat=X&lng=Y

@@ -113,7 +113,7 @@ self.addEventListener('notificationclick', (event) => {
   
   if (event.action === 'open' || !event.action) {
     event.waitUntil(
-      clients.openWindow(event.notification.data.url)
+      self.clients.openWindow(event.notification.data.url)
     );
   }
 });

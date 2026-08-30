@@ -1,9 +1,11 @@
-"""Auth routes: register, login, me, password reset."""
+"""Auth routes: register, login, me, Google OAuth, password reset."""
 import os
 import uuid
 import secrets
+import httpx
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from models import (
     UserCreate, UserLogin, UserResponse, TokenResponse,
     PasswordResetRequest, PasswordResetConfirm,
@@ -16,6 +18,8 @@ from dependencies import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+EMERGENT_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
 
 @router.post("/register", response_model=TokenResponse)
@@ -109,6 +113,121 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         referral_code=current_user.get("referral_code"),
         punti_referral=current_user.get("punti_referral", 0),
     )
+
+
+# ============== GOOGLE OAUTH (Emergent Auth) ==============
+
+@router.post("/google/session")
+async def google_session(request: Request):
+    """Exchange Emergent session_id for a persistent session."""
+    body = await request.json()
+    session_id = body.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id mancante")
+
+    # Call Emergent Auth to get user data
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            EMERGENT_SESSION_URL,
+            headers={"X-Session-ID": session_id},
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=401, detail="Sessione Google non valida")
+        google_data = resp.json()
+
+    email = google_data.get("email", "")
+    name = google_data.get("name", "")
+    picture = google_data.get("picture", "")
+    emergent_session_token = google_data.get("session_token", "")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Email non ricevuta da Google")
+
+    # Find or create user in utenti collection
+    existing = await db.utenti.find_one({"email": email}, {"_id": 0})
+    if existing:
+        user_id = existing["id"]
+        # Update picture if available
+        if picture:
+            await db.utenti.update_one({"id": user_id}, {"$set": {"picture": picture}})
+    else:
+        user_id = str(uuid.uuid4())
+        referral_code = generate_referral_code(name or "User")
+        while await db.utenti.find_one({"referral_code": referral_code}):
+            referral_code = generate_referral_code(name or "User")
+
+        user_doc = {
+            "id": user_id,
+            "email": email,
+            "nome": name or email.split("@")[0],
+            "password_hash": "",
+            "picture": picture,
+            "auth_provider": "google",
+            "data_registrazione": datetime.now(timezone.utc).isoformat(),
+            "preferenze": {
+                "raggio_max_km": 5, "max_supermercati": 3, "peso_prezzo": 0.7, "peso_tempo": 0.3,
+                "supermercati_preferiti": [], "notifiche_offerte": True, "notifiche_condivisione": True,
+            },
+            "statistiche": {"spese_totali": 0, "risparmio_totale_euro": 0.0, "tempo_totale_risparmiato_min": 0},
+            "famiglia_id": None,
+            "referral_code": referral_code,
+            "punti_referral": 0,
+            "invitato_da": None,
+        }
+        await db.utenti.insert_one(user_doc)
+        await create_notification(user_id, "sistema", "Benvenuto su Shopply!",
+            "Inizia ad aggiungere prodotti alla tua lista per ottimizzare la spesa.")
+
+    # Create session
+    session_token = emergent_session_token or secrets.token_urlsafe(48)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": expires_at.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    # Build user response
+    user = await db.utenti.find_one({"id": user_id}, {"_id": 0})
+    user_response = {
+        "id": user["id"], "email": user["email"], "nome": user["nome"],
+        "data_registrazione": user["data_registrazione"],
+        "preferenze": user["preferenze"], "statistiche": user["statistiche"],
+        "famiglia_id": user.get("famiglia_id"),
+        "referral_code": user.get("referral_code"),
+        "punti_referral": user.get("punti_referral", 0),
+        "picture": user.get("picture", ""),
+    }
+
+    # Set httpOnly cookie
+    response = JSONResponse(content={
+        "user": user_response,
+        "session_token": session_token,
+    })
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+        max_age=7 * 24 * 3600,
+    )
+    return response
+
+
+@router.post("/google/logout")
+async def google_logout(request: Request):
+    """Logout: clear session cookie and delete session from DB."""
+    session_token = request.cookies.get("session_token")
+    if session_token:
+        await db.user_sessions.delete_one({"session_token": session_token})
+
+    response = JSONResponse(content={"message": "Logout effettuato"})
+    response.delete_cookie(key="session_token", path="/", secure=True, samesite="none")
+    return response
 
 
 @router.post("/forgot-password")

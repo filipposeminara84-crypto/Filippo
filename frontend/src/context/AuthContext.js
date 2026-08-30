@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authAPI } from '../lib/api';
 
 const AuthContext = createContext(null);
@@ -7,26 +7,36 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const checkAuth = useCallback(async () => {
+    // CRITICAL: If returning from OAuth callback, skip the /me check.
+    // AuthCallback will exchange the session_id and establish the session first.
+    if (window.location.hash?.includes('session_id=')) {
+      setLoading(false);
+      return;
+    }
+
     const token = localStorage.getItem('shopply_token');
     const savedUser = localStorage.getItem('shopply_user');
-    
+
     if (token && savedUser) {
       setUser(JSON.parse(savedUser));
-      // Verify token is still valid
-      authAPI.getMe()
-        .then(res => {
-          setUser(res.data);
-          localStorage.setItem('shopply_user', JSON.stringify(res.data));
-        })
-        .catch(() => {
-          logout();
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
+      try {
+        const res = await authAPI.getMe();
+        setUser(res.data);
+        localStorage.setItem('shopply_user', JSON.stringify(res.data));
+      } catch {
+        // Token invalid, clean up
+        localStorage.removeItem('shopply_token');
+        localStorage.removeItem('shopply_user');
+        setUser(null);
+      }
     }
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
 
   const login = async (email, password) => {
     const res = await authAPI.login({ email, password });
@@ -46,7 +56,17 @@ export function AuthProvider({ children }) {
     return userData;
   };
 
-  const logout = () => {
+  const loginWithGoogle = (userData) => {
+    localStorage.setItem('shopply_user', JSON.stringify(userData));
+    setUser(userData);
+  };
+
+  const logout = async () => {
+    try {
+      await authAPI.googleLogout();
+    } catch {
+      // Ignore
+    }
     localStorage.removeItem('shopply_token');
     localStorage.removeItem('shopply_user');
     setUser(null);
@@ -58,7 +78,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

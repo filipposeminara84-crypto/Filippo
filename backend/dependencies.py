@@ -8,7 +8,7 @@ import uuid
 import bcrypt
 import jwt
 from datetime import datetime, timezone, timedelta
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from database import db
@@ -17,7 +17,7 @@ JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 # Referral constants
 REFERRAL_PUNTI_INVITANTE = 50
@@ -38,20 +38,48 @@ def create_token(user_id: str) -> str:
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Token non valido")
-        user = await db.utenti.find_one({"id": user_id}, {"_id": 0})
-        if not user:
-            raise HTTPException(status_code=401, detail="Utente non trovato")
-        return user
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token scaduto")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Token non valido")
+async def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    # 1. Try JWT from Authorization header
+    if credentials and credentials.credentials:
+        try:
+            payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            user_id = payload.get("sub")
+            if user_id:
+                user = await db.utenti.find_one({"id": user_id}, {"_id": 0})
+                if user:
+                    return user
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+            pass
+
+    # 2. Try session_token from cookie
+    session_token = request.cookies.get("session_token")
+    if session_token:
+        session = await db.user_sessions.find_one({"session_token": session_token}, {"_id": 0})
+        if session:
+            expires_at = session.get("expires_at")
+            if isinstance(expires_at, str):
+                expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            if expires_at and expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at and expires_at > datetime.now(timezone.utc):
+                user = await db.utenti.find_one({"id": session["user_id"]}, {"_id": 0})
+                if user:
+                    return user
+
+    # 3. Try Authorization header as raw Bearer token (session_token)
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        raw_token = auth_header[7:]
+        session = await db.user_sessions.find_one({"session_token": raw_token}, {"_id": 0})
+        if session:
+            user = await db.utenti.find_one({"id": session["user_id"]}, {"_id": 0})
+            if user:
+                return user
+
+    raise HTTPException(status_code=401, detail="Non autenticato")
 
 
 def haversine_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:

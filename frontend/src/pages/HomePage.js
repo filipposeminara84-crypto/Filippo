@@ -268,9 +268,6 @@ export default function HomePage() {
             <p className={`text-sm font-medium ${locationReady ? 'text-stone-700' : 'text-orange-700'}`}>
               {locationReady ? locationName : 'Imposta la tua posizione'}
             </p>
-            {locationReady && (
-              <p className="text-xs text-stone-400">{userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}</p>
-            )}
           </div>
           <span className={`text-xs font-medium ${locationReady ? 'text-emerald-500' : 'text-orange-600'}`}>
             {locationReady ? 'Cambia' : 'Imposta'}
