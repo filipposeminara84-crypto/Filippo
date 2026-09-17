@@ -1,0 +1,62 @@
+{
+  "summary": "Tested v11 features: Interactive store map with Leaflet on Offerte page + enhanced DoveConviene scraping endpoint. All 5 backend tests pass (discover, nearby filtering OSM-only, manual scrape-offerte trigger with chains list, no-stores edge case, personalized offers using osm- prefixed supermarketIds). Frontend verified end-to-end with heavy_buyer@test.com: toggle Mappa/Lista button works, Leaflet map renders with 40 chain-colored store markers + 1 green user position marker, popups display store info, clicking Lista hides map, recommended section + product cards still functional. One minor UI gap: store section header does not display indirizzo when personalized mode is active (because the supMap built from personalized payload omits indirizzo).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Store section header — show OSM address",
+        "issue": "When personalized offers load, OffertePage builds supMap with only {id, nome, distanza_km} (lines 147-149) and does NOT copy 'indirizzo' from allStoresForMap. As a result the orange store-header section never shows the OSM address even though discover() returned it. Map popups DO show the address correctly because StoreMap reads from allStoresForMap directly.",
+        "affected_selectors": ["store-card-header"]
+      }
+    ],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "POST /api/supermercati/discover?lat=45.4975&lng=9.3306&raggio_km=5 returns OSM stores with id starting 'osm-', lat/lng, catena",
+    "GET /api/supermercati/nearby returns ONLY fonte=osm stores when OSM stores exist in area, sorted by distance",
+    "POST /api/supermercati/scrape-offerte returns {message, stores>0, chains[]} for known area (Pioltello)",
+    "POST /api/supermercati/scrape-offerte returns 'Nessun negozio scoperto in zona' for area without OSM stores (Sahara test)",
+    "GET /api/offerte/personalizzate returns offers with supermarketId starting 'osm-' for OSM areas",
+    "Frontend: heavy_buyer@test.com login + navigation to /offerte loads location 'Pioltello — raggio 15 km'",
+    "Frontend: data-testid='toggle-map-btn' visible with text 'Mappa' when location set & stores discovered",
+    "Frontend: clicking Mappa shows data-testid='store-map' with 41 Leaflet markers (40 stores + 1 user pos)",
+    "Frontend: chain-colored markers render (E=Esselunga red, L=Lidl blue, A=Aldi navy, S=Sigma blue, M=MD red, etc.)",
+    "Frontend: green user-position marker centered on user coords",
+    "Frontend: toggle button text changes to 'Lista' when map is open; clicking Lista hides map (store-map detached)",
+    "Frontend: data-testid='recommended-section' (Consigliati per te) renders with personalized picks",
+    "Frontend: clicking offerta product card adds to quick list and shows add-to-list-toast",
+    "Backend: 5/5 pytest tests pass in /app/backend/tests/test_map_and_scrape_v11.py"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_map_and_scrape_v11.py",
+    "/app/test_reports/pytest/pytest_v11_results.xml"
+  ],
+  "action_items": [
+    "MINOR (optional): In /app/frontend/src/pages/OffertePage.js around line 147, when building supMap from personalized payload, also copy indirizzo from allStoresForMap[sid] so that orange store section headers show the address. e.g.: supMap[sid] = { id: sid, nome: o.supermarketName, distanza_km: o.distanceKm, indirizzo: allStoresForMap[sid]?.indirizzo }; (or merge allStoresForMap into supMap)."
+  ],
+  "critical_code_review_comments": [
+    "supermercati.py /discover correctly caches results for 7 days and falls back to cache, generates base catalog synchronously and offloads scraping to background — good separation.",
+    "/scrape-offerte endpoint correctly skips work when no OSM stores in radius (saves API quota for DoveConviene).",
+    "_background_scrape_offers iterates 40+ search terms with 1.5s sleep between requests — appropriate rate-limiting; logs warnings on per-term failures so one term failing won't crash entire job.",
+    "uuid import is at top of file — the 'if uuid in dir()' check inside _background_scrape_offers (line 201) is redundant/defensive but always evaluates True (uuid is imported globally). Minor but harmless.",
+    "StoreMap.js uses useMemo to filter stores with lat/lng; CHAIN_COLORS map covers 21 Italian chains with proper brand colors. Custom SVG icons inline keep bundle size small (no external icon assets).",
+    "OffertePage allStoresForMap is fetched via discover() which is cached on backend (7 days) — minimal load. Good.",
+    "data-testid='store-map' and 'toggle-map-btn' are present and stable for testing."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_map_and_scrape_v11.py"
+  ],
+  "success_rate": {
+    "backend": "100% (5/5 pytest)",
+    "frontend": "95% (all critical flows pass; minor: address not shown in store header when personalized)"
+  },
+  "test_credentials": "heavy_buyer@test.com / test1234 (used)",
+  "seed_data_creation": "None — used existing OSM stores at Pioltello (40) discovered in previous iterations.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend test file /app/backend/tests/test_map_and_scrape_v11.py covers map+scrape features. Note that discover endpoint is cached 7 days per cache_key (rounded lat/lng to 0.01). The personalized offers test takes ~90s on first call (full ranking). The only minor issue found is: when personalized mode is active, OffertePage.js does not propagate 'indirizzo' from allStoresForMap into supMap, so store-section headers omit the OSM address (the map popups show it correctly). Map renders 41 markers for Pioltello (40 OSM stores + 1 user pos green marker) — chain colors verified visually."
+}

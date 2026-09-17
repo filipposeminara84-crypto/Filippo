@@ -10,6 +10,7 @@ import { prodottiAPI, listeAPI, ottimizzaAPI, preferenzeAPI } from '../lib/api';
 import { formatPrice } from '../lib/utils';
 import Layout from '../components/Layout';
 import CondividiListaModal from '../components/CondividiListaModal';
+import LocationPicker from '../components/LocationPicker';
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -24,18 +25,54 @@ export default function HomePage() {
   const [ottimizzando, setOttimizzando] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [nomeListaSalvataggio, setNomeListaSalvataggio] = useState('');
-  const [userLocation, setUserLocation] = useState({ lat: 45.4945, lng: 9.3256 }); // Default Pioltello
+  // Load saved location from localStorage or use default
+  const getSavedLocation = () => {
+    try {
+      const saved = localStorage.getItem('shopply_location');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  };
+  
+  const savedLoc = getSavedLocation();
+  const [userLocation, setUserLocation] = useState(
+    savedLoc ? { lat: savedLoc.lat, lng: savedLoc.lng } : { lat: 45.4945, lng: 9.3256 }
+  );
   const [preferenze, setPreferenze] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedListaForShare, setSelectedListaForShare] = useState(null);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [locationName, setLocationName] = useState(savedLoc?.nome || 'Imposta posizione');
+  const [locationReady, setLocationReady] = useState(!!savedLoc);
   
   const inputRef = useRef(null);
 
   useEffect(() => {
     loadListeSalvate();
     loadPreferenze();
-    getUserLocation();
+    loadQuickList();
+    if (!localStorage.getItem('shopply_location')) {
+      getUserLocation();
+    } else {
+      setLocationReady(true);
+    }
   }, []);
+
+  // Load products added from Offerte page
+  const loadQuickList = () => {
+    try {
+      const quick = JSON.parse(localStorage.getItem('shopply_quick_list') || '[]');
+      if (quick.length > 0) {
+        setListaSpesa(prev => {
+          const existing = new Set(prev.map(p => p.toLowerCase()));
+          const newItems = quick.filter(p => !existing.has(p.toLowerCase()));
+          return [...prev, ...newItems];
+        });
+        // Clear the quick list after importing
+        localStorage.removeItem('shopply_quick_list');
+      }
+    } catch {}
+  };
 
   const loadListeSalvate = async () => {
     try {
@@ -55,17 +92,37 @@ export default function HomePage() {
     }
   };
 
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1&zoom=16`
+      );
+      const data = await resp.json();
+      if (data?.address) {
+        const a = data.address;
+        const via = a.road || a.pedestrian || a.footway || '';
+        const citta = a.city || a.town || a.village || a.municipality || '';
+        return [via, citta].filter(Boolean).join(', ') || citta || null;
+      }
+    } catch {}
+    return null;
+  };
+
   const getUserLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setUserLocation({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude
-          });
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const nome = await reverseGeocode(lat, lng) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+          setUserLocation({ lat, lng });
+          setLocationName(nome);
+          setLocationReady(true);
+          localStorage.setItem('shopply_location', JSON.stringify({ lat, lng, nome }));
         },
-        (err) => {
-          console.log('Geolocation error, using default location:', err.message);
+        () => {
+          // GPS failed or denied: open location picker
+          setShowLocationPicker(true);
         },
         {
           enableHighAccuracy: true,
@@ -73,6 +130,9 @@ export default function HomePage() {
           maximumAge: 60000
         }
       );
+    } else {
+      // No geolocation support: open location picker
+      setShowLocationPicker(true);
     }
   };
 
@@ -163,7 +223,7 @@ export default function HomePage() {
         peso_tempo: preferenze?.peso_tempo || 0.3
       });
       
-      navigate('/risultati', { state: { risultato: res.data, listaOriginale: listaSpesa } });
+      navigate('/risultati', { state: { risultato: res.data, listaOriginale: listaSpesa, userLocation } });
     } catch (err) {
       alert(err.response?.data?.detail || 'Errore nell\'ottimizzazione');
     } finally {
@@ -178,7 +238,7 @@ export default function HomePage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-stone-900">
-              Ciao, {user?.nome}! 👋
+              Ciao, {user?.nome}!
             </h1>
             <p className="text-stone-500 mt-1">Cosa devi comprare oggi?</p>
           </div>
@@ -192,6 +252,27 @@ export default function HomePage() {
             </div>
           )}
         </div>
+
+        {/* Location Bar */}
+        <button
+          onClick={() => setShowLocationPicker(true)}
+          className={`w-full flex items-center gap-3 rounded-2xl shadow-sm border px-4 py-3 transition-colors ${
+            locationReady 
+              ? 'bg-white border-stone-100 hover:border-emerald-300' 
+              : 'bg-orange-50 border-orange-200 animate-pulse'
+          }`}
+          data-testid="location-bar"
+        >
+          <MapPin className={`w-5 h-5 ${locationReady ? 'text-emerald-500' : 'text-orange-500'}`} />
+          <div className="flex-1 text-left">
+            <p className={`text-sm font-medium ${locationReady ? 'text-stone-700' : 'text-orange-700'}`}>
+              {locationReady ? locationName : 'Imposta la tua posizione'}
+            </p>
+          </div>
+          <span className={`text-xs font-medium ${locationReady ? 'text-emerald-500' : 'text-orange-600'}`}>
+            {locationReady ? 'Cambia' : 'Imposta'}
+          </span>
+        </button>
 
         {/* Input Lista */}
         <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-5">
@@ -442,6 +523,25 @@ export default function HomePage() {
           loadListeSalvate();
         }}
       />
+
+      {/* Location Picker Modal */}
+      <AnimatePresence>
+        {showLocationPicker && (
+          <LocationPicker
+            currentLocation={userLocation}
+            onLocationChange={(loc) => {
+              const newLoc = { lat: loc.lat, lng: loc.lng };
+              const newName = loc.nome || `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`;
+              setUserLocation(newLoc);
+              setLocationName(newName);
+              setLocationReady(true);
+              localStorage.setItem('shopply_location', JSON.stringify({ ...newLoc, nome: newName }));
+              setShowLocationPicker(false);
+            }}
+            onClose={() => setShowLocationPicker(false)}
+          />
+        )}
+      </AnimatePresence>
     </Layout>
   );
 }

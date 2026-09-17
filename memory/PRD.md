@@ -1,72 +1,56 @@
-# Shopply - PRD (Product Requirements Document)
+# Shopply - PRD
 
 ## Problema Originale
-App web per ottimizzare la spesa al supermercato, trovando i migliori prezzi tra più supermercati nella zona dell'utente (Area Pioltello).
+App web per ottimizzare la spesa al supermercato tra piu catene, copertura tutta Italia.
 
-## Stack Tecnologico
-- **Frontend**: React.js, TailwindCSS, Framer Motion, Leaflet, lucide-react
-- **Backend**: FastAPI, Python, MongoDB (motor), JWT auth
-- **Architettura**: SPA con REST API, PWA con offline capabilities
+## Funzionalita Implementate
 
-## Funzionalità Implementate
+### v4.4.0 - Audit Accuratezza Dati (30 Agosto 2026)
+- **Solo negozi reali**: rimossi 35 seed fittizi + 8 non-supermercati (Tigotà, Cash&Carry, centri commerciali); DB = 100% negozi OSM reali
+- **Catene corrette**: matching word-boundary (fix "SK Alimentari"→Ali, "Iperal Milano"→Iper, LaEsse→Esselunga); 23 riclassificazioni
+- **Solo offerte reali**: eliminate 5.299 offerte sintetiche random (prezzi originali ripristinati); ~19k offerte tutte da volantini DoveConviene
+- **Prodotti DC arricchiti**: 47.644 fix categoria (search_term→categoria standard) + brand estratto da "Brand - Prodotto"
+- **Overpass resiliente**: 5 mirror con fallback + budget 30s; se tutti down → fallback a negozi OSM già in DB
+- **Freshness**: re-scraping automatico in background se ultimo scrape >3 giorni (su cache-hit discovery)
+- **UI**: badge "Volantino" sulle offerte da fonte reale doveconviene
+- Nota: prezzi non in offerta del catalogo base restano indicativi (fonte_prezzo=catalogo_base); /api/seed ricreerebbe store fittizi (non usare)
 
-### MVP (v1.0)
-- Autenticazione utente (email/password)
-- Creazione e gestione liste della spesa
-- Algoritmo di ottimizzazione prezzi
-- Mappa con posizioni supermercati e percorsi
-- Dati seed per supermercati e prodotti
+### v4.3.0 - Google Sign-in (Emergent Auth) (30 Agosto 2026)
+- **Google OAuth** via Emergent Auth: pulsante "Accedi con Google" sulla pagina login
+- Flusso: login page → auth.emergentagent.com → callback con session_id → exchange per session
+- Utenti Google auto-creati nella collection utenti con auth_provider: "google"
+- Session cookie httpOnly + supporto dual-auth (JWT + session_token) in get_current_user
+- AuthCallback component per gestire il redirect OAuth
+- Logout Google: elimina session cookie e session dal DB
+- JWT auth tradizionale preservato e funzionante
 
-### V2.0
-- Database prodotti/supermercati espanso
-- Aggiornamento automatico prezzi + offerte speciali
-- Notifiche in-app per offerte
-- Condivisione liste con familiari
+### v4.2.0 - Mappa Interattiva + Scraping Potenziato (26 Aprile 2026)
+- Mappa Leaflet interattiva con marker colorati per catena (21+ colori brand)
+- Toggle Mappa/Lista, popup informativi, scroll-to-store
+- Scraping DoveConviene 40+ search terms, endpoint manuale scraping
 
-### V2.1
-- Programma referral (punti/sconti per inviti)
-- PWA installabile con supporto offline
+### v4.1.0 - Supermercati e Offerte Reali (26 Aprile 2026)
+- Discovery OpenStreetMap Overpass API (536+ negozi Pioltello, 112+ Catania)
+- Catalogo base, scraping DoveConviene, deduplicazione OSM/seed, cache 7gg
 
-### V2.2 (18 Marzo 2026)
-- Flusso "Password Dimenticata" completo
-- Correzione Geolocalizzazione (enableHighAccuracy)
-- Fix Build Frontend (JSX duplicato)
+### v4.0.0 - Ranking Personalizzato Offerte (20 Aprile 2026)
+- Scoring 0-100, cold-start fallback, blended mode, diversity guardrails
+- UI labels personalizzate, "Consigliati per te", debug mode
 
-### V2.3 (21 Marzo 2026) - Database Prodotti/Offerte
-- **12 Supermercati**: Coop, Esselunga, Lidl, Eurospin, Carrefour, Penny, MD, Conad, Aldi, Despar, Unes, Iperal (tutti nell'area Pioltello/Segrate/Cernusco)
-- **2532 Prodotti** suddivisi in 12 categorie (Latticini, Pane e Cereali, Frutta e Verdura, Carne e Pesce, Bevande, Snack e Dolci, Condimenti e Salse, Surgelati, Igiene e Casa, Igiene Personale, Baby e Infanzia, Pet Food)
-- **Scraping Prezzi Reali da DoveConviene.it**: Sistema di web scraping con BeautifulSoup che estrae prezzi, offerte e sconti dai volantini
-- **Pagina Gestione Prezzi** (/prezzi): Interfaccia per cercare prodotti, avviare scraping per categoria o termine, visualizzare anteprime prezzi e storico aggiornamenti
-- **Aggiornamento prezzi in background**: Lo scraping viene eseguito in background con polling dello stato
+### v3.x - Offerte Geolocalizzate, Click-to-Add, Product Tooltip
+### v2.x - Backend Refactoring, Fuzzy Matching
+### Core: Auth JWT, liste spesa, ottimizzazione prezzi, mappa, PWA, referral, notifiche, famiglia
 
-## Schema DB Principale
-- **utenti**: {id, email, nome, hashed_password, referral_code, punti_referral}
-- **prodotti**: {id, nome_prodotto, supermercato_id, prezzo, categoria, in_offerta, fonte_prezzo, data_aggiornamento}
-- **supermercati**: {id, nome, catena, indirizzo, lat, lng}
-- **liste_spesa**: {id, utente_id, nome, prodotti}
-- **notifiche**: {id, utente_id, tipo, messaggio}
-- **famiglie**: {id, nome, creatore_id, membri}
-- **password_resets**: {email, token, expiry, used}
-- **scraping_log**: {id, data, prodotti_trovati, prodotti_aggiornati, nuove_offerte, errori, tipo}
+## Architettura
+- Backend: FastAPI modulare (routes/, ranking_engine.py, store_discovery.py, catalog_generator.py, scraper.py)
+- Frontend: React + TailwindCSS + Leaflet + Framer Motion
+- Database: MongoDB (motor async)
+- Auth: JWT (email/password) + Emergent Google OAuth (session cookies)
+- APIs: OpenStreetMap Overpass, DoveConviene, Open Food Facts, Nominatim, Emergent Auth
 
-## API Principali
-- Auth: /api/auth/login, /api/auth/register, /api/auth/forgot-password, /api/auth/reset-password
-- Prodotti: /api/prodotti, /api/prodotti/offerte, /api/prodotti/autocomplete
-- Supermercati: /api/supermercati
-- Scraper: /api/scraper/run, /api/scraper/status, /api/scraper/log, /api/scraper/categories, /api/scraper/search-preview
-- Liste: /api/liste, /api/liste/{id}
-- Ottimizzazione: /api/ottimizza
-
-## Backlog Prioritizzato
-
-### P2 - Prossime
-- Missioni Giornaliere/Settimanali (engagement gamification)
-
-### P3 - Future
-- Integrazione Assistenti Vocali (Google Assistant, Alexa, Siri) - rinviata in attesa delle API
-
-## Note Tecniche
-- Email reset password è SIMULATA (stampa in console + notifica in-app)
-- Backend monolitico in server.py (considerare suddivisione)
-- Lo scraping da DoveConviene è REALE, non simulato
-- Il database prodotti ha variazioni di prezzo realistiche per catena
+## Backlog
+### P1: Missioni Giornaliere/Settimanali (gamification)
+### P2: Scraping scheduling automatico (cron-style) — parziale: re-scrape se >3gg su discovery
+### P2: Espansione nazionale Q2 2026
+### P3: Assistenti Vocali
+### Idea: filtro mappa per catena; foto profilo Google in navbar

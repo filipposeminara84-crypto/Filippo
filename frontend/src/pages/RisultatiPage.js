@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { formatPrice, formatTime } from '../lib/utils';
 import Layout from '../components/Layout';
+import ProductTooltip from '../components/ProductTooltip';
 import 'leaflet/dist/leaflet.css';
 
 // Fix Leaflet default icon issue
@@ -71,7 +72,20 @@ export default function RisultatiPage() {
   const navigate = useNavigate();
   const risultato = location.state?.risultato;
   const [expandedStore, setExpandedStore] = useState(null);
-  const [userPosition] = useState({ lat: 45.4945, lng: 9.3256 });
+  
+  // Get user position from navigation state or localStorage
+  const getUserPos = () => {
+    if (location.state?.userLocation) return location.state.userLocation;
+    try {
+      const saved = localStorage.getItem('shopply_location');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { lat: parsed.lat, lng: parsed.lng };
+      }
+    } catch {}
+    return { lat: 45.4945, lng: 9.3256 };
+  };
+  const [userPosition] = useState(getUserPos);
 
   // Calculate map bounds - always call hooks
   const bounds = useMemo(() => {
@@ -120,7 +134,7 @@ export default function RisultatiPage() {
     );
   }
 
-  const { piano_ottimale, costo_totale, tempo_stimato_min, risparmio_euro, risparmio_percentuale, distanza_totale_km } = risultato;
+  const { piano_ottimale, costo_totale, tempo_stimato_min, risparmio_euro, risparmio_percentuale, distanza_totale_km, prodotti_non_trovati } = risultato;
 
   return (
     <Layout>
@@ -198,6 +212,25 @@ export default function RisultatiPage() {
             <p className="text-xs text-stone-500">{distanza_totale_km} km</p>
           </motion.div>
         </div>
+
+        {/* Warning: products not found */}
+        {prodotti_non_trovati && prodotti_non_trovati.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-orange-50 border border-orange-200 rounded-2xl p-4"
+            data-testid="products-not-found"
+          >
+            <p className="text-sm font-medium text-orange-700 mb-1">
+              Prodotti non disponibili nella tua zona:
+            </p>
+            <ul className="text-sm text-orange-600">
+              {prodotti_non_trovati.map((p, i) => (
+                <li key={i}>- {p}</li>
+              ))}
+            </ul>
+          </motion.div>
+        )}
 
         {/* Map */}
         <motion.div
@@ -320,9 +353,21 @@ export default function RisultatiPage() {
                       <div
                         key={prodIdx}
                         className="flex items-center justify-between py-2 border-b border-stone-50 last:border-0"
+                        data-testid={`product-row-${prodIdx}`}
                       >
-                        <span className="text-stone-700">{prod.prodotto}</span>
-                        <span className="font-mono text-stone-900">{formatPrice(prod.prezzo)}</span>
+                        <ProductTooltip productName={prod.prodotto}>
+                          <span className="text-stone-700 hover:text-emerald-600 transition-colors border-b border-dashed border-stone-300 hover:border-emerald-400">
+                            {prod.prodotto}
+                          </span>
+                        </ProductTooltip>
+                        <div className="flex items-center gap-2">
+                          {prod.in_offerta && (
+                            <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-medium">
+                              Offerta
+                            </span>
+                          )}
+                          <span className="font-mono text-stone-900">{formatPrice(prod.prezzo)}</span>
+                        </div>
                       </div>
                     ))}
                   </div>

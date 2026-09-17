@@ -16,7 +16,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !window.location.pathname.includes('/login')) {
       localStorage.removeItem('shopply_token');
       localStorage.removeItem('shopply_user');
       window.location.href = '/login';
@@ -29,16 +29,22 @@ api.interceptors.response.use(
 export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
-  getMe: () => api.get('/auth/me'),
+  getMe: () => api.get('/auth/me', { withCredentials: true }),
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token, new_password) => api.post('/auth/reset-password', { token, new_password }),
   verifyResetToken: (token) => api.get('/auth/verify-reset-token', { params: { token } }),
+  googleSession: (session_id) => api.post('/auth/google/session', { session_id }, { withCredentials: true }),
+  googleLogout: () => api.post('/auth/google/logout', null, { withCredentials: true }),
 };
 
 // Supermercati
 export const supermercatiAPI = {
   getAll: () => api.get('/supermercati'),
   getById: (id) => api.get(`/supermercati/${id}`),
+  nearby: (lat, lng, raggio_km = 10) => api.get('/supermercati/nearby', { params: { lat, lng, raggio_km } }),
+  copertura: () => api.get('/copertura'),
+  discover: (lat, lng, raggio_km = 15) => api.post('/supermercati/discover', null, { params: { lat, lng, raggio_km } }),
+  scrapeOfferte: (lat, lng) => api.post('/supermercati/scrape-offerte', null, { params: { lat, lng, raggio_km: 15 } }),
 };
 
 // Prodotti
@@ -47,6 +53,7 @@ export const prodottiAPI = {
   autocomplete: (q) => api.get('/prodotti/autocomplete', { params: { q } }),
   getCategorie: () => api.get('/categorie'),
   getOfferte: () => api.get('/prodotti/offerte'),
+  catalogo: (categoria) => api.get('/catalogo', { params: categoria ? { categoria } : {} }),
 };
 
 // Liste
@@ -112,11 +119,27 @@ export const prezziAPI = {
 
 // Scraper / Prezzi
 export const scraperAPI = {
-  run: (search_term) => api.post('/scraper/run', null, { params: search_term ? { search_term } : {} }),
+  run: (search_term, fonti) => {
+    const params = {};
+    if (search_term) params.search_term = search_term;
+    return api.post('/scraper/run', fonti || null, { params });
+  },
   status: () => api.get('/scraper/status'),
   log: (limit = 20) => api.get('/scraper/log', { params: { limit } }),
   categories: () => api.get('/scraper/categories'),
-  searchPreview: (search_term) => api.post('/scraper/search-preview', null, { params: { search_term } }),
+  searchPreview: (search_term, fonti) => {
+    const params = { search_term };
+    return api.post('/scraper/search-preview', fonti || null, { params });
+  },
+};
+
+// Raccomandazioni / Personalized Offers
+export const raccomandazioniAPI = {
+  getPersonalizzate: (params) => api.get('/offerte/personalizzate', { params }),
+  recordPurchase: (data) => api.post('/acquisti', data),
+  recordPurchasesBulk: (data) => api.post('/acquisti/bulk', data),
+  getPurchaseHistory: (limit = 100) => api.get('/acquisti', { params: { limit } }),
+  seedMockPurchases: () => api.post('/acquisti/seed-mock'),
 };
 
 // Seed
